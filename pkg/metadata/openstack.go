@@ -1,32 +1,33 @@
-package contextapi
+package metadata
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
-	"github.com/sntns/gluster-provisioner-listener/pkg/model"
+	"github.com/sntns/gluster-provisioner/pkg/capability"
+	"github.com/sntns/gluster-provisioner/pkg/model"
 )
 
-type openstackMeta struct {
-	Name    string          `json:"name"`
-	Devices []openstackDisk `json:"devices"`
+const OPENSTACK_METADATA_URL = "http://169.254.169.254/openstack/latest/meta_data.json"
+
+// Use Meta from local package
+
+// OpenStackFetcher fetches disk metadata from OpenStack metadata API
+type OpenStackFetcher struct {
+	Logger capability.Logger
 }
 
-type openstackDisk struct {
-	Address string   `json:"address"`
-	Tags    []string `json:"tags"`
+func NewOpenStackFetcher(logger capability.Logger) *OpenStackFetcher {
+	return &OpenStackFetcher{
+		Logger: logger,
+	}
 }
 
-// FetchContext fetches disk metadata from the API (generic, calls OpenStack by default)
-func FetchContext(dev string) (*model.DiskMetadata, error) {
-	return fetchOpenStackContext(dev)
-}
-
-// fetchOpenStackContext fetches metadata from OpenStack metadata API
-func fetchOpenStackContext(dev string) (*model.DiskMetadata, error) {
-	resp, err := http.Get("http://169.254.169.254/openstack/latest/meta_data.json")
+func (f *OpenStackFetcher) DiskFetchContext(ctx context.Context, device model.DeviceInfo) (*model.DiskMetadata, error) {
+	resp, err := http.Get(OPENSTACK_METADATA_URL)
 	if err != nil {
 		return nil, err
 	}
@@ -38,21 +39,9 @@ func fetchOpenStackContext(dev string) (*model.DiskMetadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	var meta openstackMeta
+	var meta Meta
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return nil, err
 	}
-	var metadata *model.DiskMetadata
-	for _, d := range meta.Devices {
-		if d.Address == dev {
-			if len(d.Tags) > 0 {
-				metadata = &model.DiskMetadata{
-					Name: d.Tags[0],
-					Tags: d.Tags[1:],
-				}
-			}
-			break
-		}
-	}
-	return metadata, nil
+	return match(meta, device)
 }

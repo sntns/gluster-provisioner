@@ -1,0 +1,8 @@
+{
+ "Name": "loop24",
+ "Path": "/sys/devices/virtual/block/loop24",
+ "Type": "disk",
+ "Seq": 56,
+ "Major": 7,
+ "Minor": 24
+}

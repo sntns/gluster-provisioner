@@ -1,0 +1,7 @@
+subsystem: "block"
+action: "add"
+filters:
+  op: "AND"
+  items:
+    - type: "path"
+      pattern: "^/dev/loop24$"

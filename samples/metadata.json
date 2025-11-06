@@ -1,0 +1,20 @@
+{
+  "uuid": "0b948fb5-b531-430b-a731-c8ccc72ab847",
+  "hostname": "eu2-sntns-docker-1",
+  "name": "eu2-sntns-docker-1",
+  "launch_index": 0,
+  "availability_zone": "nova",
+  "random_seed": "A4HRig8vuotqFzcHj/YxUk6HP1PwejlzeoLjeO1tQiT0KwDxucdtOOvuOxaw7MsdgGz3TKc/J3jGZnxuZ0NxZtzg2PbVYXyxLaQFsDihcF+pwVaymAjYI3GJGjMd3v/0oPgyNGAzqVzAM0sdLqp1Sae4Hg5mxckJidfKNtSerqpFc+qFO++B0/2yEncg9bYHRAT3awdjmGM1BlPZSOxDWp4DNTRhUoW9yzW3aStc2ieMMjCO7njCDkEv2QJDjSrsTvfCfeCdYdmYAMBh8vy+V7gzvc9Gxzc8FmONiEVx2ZpYgvh3YLvjiIaZPOBkzf4+NEX/fVrcQyNeFW+txAZ6ncuW96Uerf9AnL1tDxX1wY5G4LI+9mPTl4Rw1G8IZAZ9bd+AGbw+eM8iLkba1zjLlowTTlaegvNYWLY+1gHCeQGiGnlsZVbcJbitX/eV38Xm21VuQeJ8fsnTKtDTKLLIFDlf/VToofa113aZrwVtla32lEZ2z5DUS9AdGDF3sneo1r61oHOSvmiusYvMDcMDai+cKNPFty8kaQspUVZb79c0QEd+2ndvWY6/IWwZmoE63vI+kQSOnMXFcWvUJgMQ/vWEA3iaGmJfg81YQu6CrUZY5NVS+d74TC0+KS6KRaPNfhNzGIqpaf0Eo3csxMIvxrmYqJ/BLbhSXIwGixu5Xp8=",
+  "project_id": "244ec37b36dc4608be3d14ca3d6ca076",
+  "devices": [
+    {
+      "type": "disk",
+      "serial": "b395cc14-afcd-46bf-a98c-06842284492a",
+      "bus": "virtual",
+      "address": "loop24",
+      "tags": [
+        "obss"
+      ]
+    }
+  ]
+}

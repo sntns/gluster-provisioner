@@ -1,0 +1,8 @@
+{
+ "Name": "vdb",
+ "Path": "/sys/devices/pci0000:00/0000:00:07.0/virtio4/block/vdb",
+ "Type": "disk",
+ "Seq": 2,
+ "Major": 254,
+ "Minor": 16
+}

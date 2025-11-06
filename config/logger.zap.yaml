@@ -1,0 +1,11 @@
+level: debug
+annotations: 
+  caller: false
+  stacktrace: false
+outputPaths:
+  - stdout
+errorOutputPaths :
+  - stderr
+labels:
+  bundle: infra
+  container: gluster-provisioner

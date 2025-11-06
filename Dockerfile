@@ -4,12 +4,12 @@ WORKDIR /app
 
 COPY . .
 
-RUN cd cmd/gluster-provisioner-listener && go build -o /gluster-provisioner-listener
+RUN cd cmd/gluster-provisioner && go build -o /gluster-provisioner
 
 FROM alpine:3.19
 
-RUN apk add --no-cache eudev parted e2fsprogs
+RUN apk add --no-cache eudev parted e2fsprogs lsblk
 
-COPY --from=builder /gluster-provisioner-listener /usr/local/bin/gluster-provisioner-listener
+COPY --from=builder /gluster-provisioner /usr/local/bin/gluster-provisioner
 
-ENTRYPOINT ["/usr/local/bin/gluster-provisioner-listener"]
+ENTRYPOINT ["/usr/local/bin/gluster-provisioner"]
