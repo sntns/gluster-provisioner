@@ -1,0 +1,93 @@
+name: Check GlusterFS Version Updates
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-gluster-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get current GlusterFS version
+        id: current-version
+        run: |
+          CURRENT=$(grep 'GLUSTER_VERSION' .github/workflows/docker-image.yml | grep -oP "'\K[0-9.]+(?=')" | head -1)
+          echo "version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current GlusterFS version: $CURRENT"
+      
+      - name: Check latest GlusterFS version
+        id: latest-version
+        run: |
+          # Query the CentOS Stream 9 repository for latest glusterfs version
+          # This is a simplified check - in production you might want to use a more robust method
+          LATEST=$(curl -s https://api.github.com/repos/gluster/glusterfs/tags | \
+                   jq -r '.[].name' | \
+                   grep -E '^v[0-9]+\.[0-9]+$' | \
+                   sed 's/^v//' | \
+                   sort -V | \
+                   tail -1)
+          
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+          echo "Latest GlusterFS version: $LATEST"
+      
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT="${{ steps.current-version.outputs.version }}"
+          LATEST="${{ steps.latest-version.outputs.version }}"
+          
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "GlusterFS update available: $CURRENT -> $LATEST"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "GlusterFS is up to date: $CURRENT"
+          fi
+      
+      - name: Update GlusterFS version in workflow
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          LATEST="${{ steps.latest-version.outputs.version }}"
+          sed -i "s/GLUSTER_VERSION: '[0-9.]*'/GLUSTER_VERSION: '$LATEST'/" .github/workflows/docker-image.yml
+      
+      - name: Update Dockerfile default version
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          LATEST="${{ steps.latest-version.outputs.version }}"
+          sed -i "s/ARG GLUSTER_VERSION=[0-9.]*/ARG GLUSTER_VERSION=$LATEST/" Dockerfile
+      
+      - name: Create Pull Request
+        if: steps.compare.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update GlusterFS version to ${{ steps.latest-version.outputs.version }}"
+          title: "Update GlusterFS version to ${{ steps.latest-version.outputs.version }}"
+          body: |
+            ## Automated GlusterFS Version Update
+            
+            This PR updates the GlusterFS version from ${{ steps.current-version.outputs.version }} to ${{ steps.latest-version.outputs.version }}.
+            
+            **Changes:**
+            - Updated default GLUSTER_VERSION in Dockerfile
+            - Updated GLUSTER_VERSION in CI workflow
+            
+            **Next Steps:**
+            - Review the changes
+            - Test the build with the new version
+            - Merge when ready
+            
+            This PR was automatically created by the GlusterFS version check workflow.
+          branch: update-gluster-version-${{ steps.latest-version.outputs.version }}
+          delete-branch: true
+          labels: |
+            dependencies
+            automated
