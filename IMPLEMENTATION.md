@@ -3,7 +3,7 @@
 ## Problem Statement
 The Docker image must run both the GlusterFS cluster daemon and the gluster-provisioner code simultaneously. The Docker image should be tagged with `v1-v2` format where:
 - v1 = GlusterFS cluster version
-- v2 = provisioner version
+- v2 = provisioner version (single digit)
 
 Additionally, create a CI pipeline that automatically updates the cluster version.
 
@@ -23,23 +23,19 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
 
 - Added build arguments:
   - `GLUSTER_VERSION`: Defaults to 11.1
-  - `PROVISIONER_VERSION`: Defaults to 1.0.0
+  - `PROVISIONER_VERSION`: Defaults to 1 (single digit for simplicity)
 
 - Added OCI labels for version tracking:
   - `gluster.version`
   - `provisioner.version`
 
 **Entrypoint Script (entrypoint.sh):**
-```bash
-#!/bin/sh
-set -e
-# Start GlusterFS daemon in background
-glusterd
-# Wait for startup
-sleep 2
-# Run provisioner in foreground
-exec /usr/local/bin/gluster-provisioner "$@"
-```
+- Starts GlusterFS daemon in background with `--no-daemon` flag
+- Starts gluster-provisioner in background
+- Monitors both processes continuously
+- Merges logs from both processes to stdout
+- Handles graceful shutdown with signal handlers
+- Exits if either process fails
 
 ### 2. Dual-Version Tagging System
 
@@ -50,9 +46,9 @@ Implemented in `.github/workflows/docker-image.yml`:
 - `sha-{git-sha}`
 - `{GLUSTER_VERSION}-latest` (e.g., `11.1-latest`)
 
-**For version tag pushes (e.g., v1.0.0):**
-- `{version}` (e.g., `1.0.0`)
-- `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1.0.0`) ✅ **This is the v1-v2 format**
+**For version tag pushes (e.g., v1):**
+- `{version}` (e.g., `1`)
+- `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1`) ✅ **This is the v1-v2 format**
 
 **Manual workflow dispatch:**
 - Allows specifying custom GLUSTER_VERSION parameter
@@ -140,31 +136,32 @@ The `{GLUSTER_VERSION}-{PROVISIONER_VERSION}` format:
 # Build with specific versions
 docker build \
   --build-arg GLUSTER_VERSION=11.1 \
-  --build-arg PROVISIONER_VERSION=1.0.0 \
-  -t ghcr.io/sntns/gluster-provisioner:11.1-1.0.0 \
+  --build-arg PROVISIONER_VERSION=1 \
+  -t ghcr.io/sntns/gluster-provisioner:11.1-1 \
   .
 
 # Run the container
 docker run -d \
   --privileged \
   --name gluster-provisioner \
-  ghcr.io/sntns/gluster-provisioner:11.1-1.0.0 \
+  ghcr.io/sntns/gluster-provisioner:11.1-1 \
   run
 ```
 
 ## Benefits
 
-1. **Clear versioning**: Users know exactly what versions they're running
+1. **Clear versioning**: Users know exactly what versions they're running (single-digit provisioner version for simplicity)
 2. **Automated updates**: No manual tracking of GlusterFS releases
 3. **Flexibility**: Can manually override versions when needed
-4. **Proper integration**: Both daemons run together seamlessly
-5. **Documentation**: Clear guide for users and contributors
-6. **CI/CD automation**: Builds happen automatically with proper tags
+4. **Process monitoring**: Entrypoint monitors both daemons and merges logs
+5. **Proper integration**: Both daemons run together seamlessly with health checks
+6. **Documentation**: Clear guide for users and contributors
+7. **CI/CD automation**: Builds happen automatically with proper tags
 
 ## Next Steps (for users)
 
 1. Review and merge this PR
-2. Tag a release (e.g., `git tag v1.0.0`)
+2. Tag a release (e.g., `git tag v1`)
 3. Push the tag to trigger release build
 4. Verify the automated workflows run successfully
 5. Test the dual-daemon container in your environment

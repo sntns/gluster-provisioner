@@ -7,11 +7,11 @@ This repository contains a Docker image that runs both the GlusterFS daemon (glu
 The Docker image uses a dual-version tagging scheme:
 
 - Format: `v{GLUSTER_VERSION}-{PROVISIONER_VERSION}`
-- Example: `ghcr.io/sntns/gluster-provisioner:11.1-1.0.0`
+- Example: `ghcr.io/sntns/gluster-provisioner:11.1-1`
 
 Where:
 - `GLUSTER_VERSION` is the version of GlusterFS cluster daemon (e.g., `11.1`)
-- `PROVISIONER_VERSION` is the version of the gluster-provisioner application (e.g., `1.0.0`)
+- `PROVISIONER_VERSION` is a single-digit version of the gluster-provisioner application (e.g., `1`)
 
 ## Architecture
 
@@ -21,7 +21,9 @@ The Docker image is built using a multi-stage build process:
 2. **GlusterFS Base Stage**: Sets up CentOS Stream 9 with GlusterFS server
 3. **Final Stage**: Combines both components with an entrypoint script that:
    - Starts the GlusterFS daemon (glusterd) in the background
-   - Runs the gluster-provisioner application
+   - Starts the gluster-provisioner application in the background
+   - Monitors both processes and merges their logs to stdout
+   - Handles graceful shutdown of both processes
 
 ### Why CentOS Stream 9?
 
@@ -41,8 +43,8 @@ docker build -t gluster-provisioner .
 ```bash
 docker build \
   --build-arg GLUSTER_VERSION=11.1 \
-  --build-arg PROVISIONER_VERSION=1.0.0 \
-  -t gluster-provisioner:11.1-1.0.0 \
+  --build-arg PROVISIONER_VERSION=1 \
+  -t gluster-provisioner:11.1-1 \
   .
 ```
 
@@ -60,10 +62,10 @@ The repository includes two GitHub Actions workflows:
   - `{sha}`
   - `{GLUSTER_VERSION}-latest`
 
-**On version tags (e.g., `v1.0.0`):**
+**On version tags (e.g., `v1`):**
 - Builds and pushes with tags:
-  - `{version}` (e.g., `1.0.0`)
-  - `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1.0.0`)
+  - `{version}` (e.g., `1`)
+  - `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1`)
 - Creates a GitHub Release with version information
 
 **Manual Trigger:**
@@ -102,7 +104,7 @@ docker run -d \
   --privileged \
   --name gluster-provisioner \
   -v /path/to/config:/config \
-  ghcr.io/sntns/gluster-provisioner:11.1-1.0.0 \
+  ghcr.io/sntns/gluster-provisioner:11.1-1 \
   run
 ```
 
@@ -128,12 +130,12 @@ To check the versions of components in the image:
 
 ```bash
 # Check image labels
-docker inspect ghcr.io/sntns/gluster-provisioner:11.1-1.0.0 | jq '.[0].Config.Labels'
+docker inspect ghcr.io/sntns/gluster-provisioner:11.1-1 | jq '.[0].Config.Labels'
 
 # Example output:
 {
   "gluster.version": "11.1",
-  "provisioner.version": "1.0.0",
+  "provisioner.version": "1",
   "org.opencontainers.image.title": "GlusterFS Provisioner",
   "org.opencontainers.image.description": "Container running GlusterFS daemon and provisioner"
 }
@@ -148,8 +150,8 @@ The automated workflow checks for updates weekly and creates PRs.
 1. Update `GLUSTER_VERSION` in `Dockerfile`
 2. Update `GLUSTER_VERSION` in `.github/workflows/docker-image.yml`
 3. Commit and push changes
-4. Tag a new release: `git tag -a v1.0.1 -m "Update to GlusterFS 11.2"`
-5. Push the tag: `git push origin v1.0.1`
+4. Tag a new release: `git tag -a v2 -m "Provisioner version 2"`
+5. Push the tag: `git push origin v2`
 
 ## Development
 

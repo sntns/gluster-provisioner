@@ -1,6 +1,6 @@
 # Build arguments for versioning
 ARG GLUSTER_VERSION=11.1
-ARG PROVISIONER_VERSION=1.0.0
+ARG PROVISIONER_VERSION=1
 
 FROM golang:1.24-alpine AS builder
 
