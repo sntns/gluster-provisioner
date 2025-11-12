@@ -43,10 +43,18 @@ COPY --from=builder /gluster-provisioner /usr/local/bin/gluster-provisioner
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Copy the healthcheck script
+COPY healthcheck.sh /healthcheck.sh
+RUN chmod +x /healthcheck.sh
+
 # Add version labels
 LABEL org.opencontainers.image.title="GlusterFS Provisioner"
 LABEL org.opencontainers.image.description="Container running GlusterFS daemon and provisioner"
 LABEL gluster.version="${GLUSTER_VERSION}"
 LABEL provisioner.version="${PROVISIONER_VERSION}"
+
+# Configure health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD /healthcheck.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

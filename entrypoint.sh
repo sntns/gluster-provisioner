@@ -36,12 +36,16 @@ while true; do
     # Check if glusterd is still running
     if ! kill -0 $GLUSTERD_PID 2>/dev/null; then
         echo "ERROR: GlusterFS daemon (PID $GLUSTERD_PID) has stopped unexpectedly"
+        # Kill the other process
+        kill $PROVISIONER_PID 2>/dev/null || true
         exit 1
     fi
     
     # Check if provisioner is still running
     if ! kill -0 $PROVISIONER_PID 2>/dev/null; then
         echo "ERROR: Gluster-provisioner (PID $PROVISIONER_PID) has stopped unexpectedly"
+        # Kill the other process
+        kill $GLUSTERD_PID 2>/dev/null || true
         exit 1
     fi
     

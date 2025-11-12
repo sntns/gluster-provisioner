@@ -23,7 +23,9 @@ The Docker image is built using a multi-stage build process:
    - Starts the GlusterFS daemon (glusterd) in the background
    - Starts the gluster-provisioner application in the background
    - Monitors both processes and merges their logs to stdout
+   - Automatically terminates and exits if either process stops
    - Handles graceful shutdown of both processes
+   - Includes Docker HEALTHCHECK for container orchestration
 
 ### Why CentOS Stream 9?
 
@@ -31,6 +33,16 @@ Alpine Linux does not support GlusterFS due to musl libc compatibility issues. C
 - Official GlusterFS packages are available
 - Well-tested and supported for GlusterFS deployments
 - Compatible with the Storage SIG repository
+
+### Health Checks
+
+The Docker image includes a built-in HEALTHCHECK that:
+- Runs every 30 seconds
+- Verifies both `glusterd` and `gluster-provisioner` processes are running
+- Has a 10-second timeout per check
+- Allows 10-second start period for initialization
+- Marks container as unhealthy after 3 consecutive failures
+- Enables automatic container restart policies in orchestrators (Docker Compose, Kubernetes, etc.)
 
 ## Building the Image
 
@@ -112,6 +124,27 @@ docker run -d \
 - Manage block devices
 - Start the GlusterFS daemon
 - Perform disk operations
+
+### Health Check Monitoring
+
+Check container health status:
+```bash
+# View health status
+docker inspect --format='{{.State.Health.Status}}' gluster-provisioner
+
+# View health check logs
+docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' gluster-provisioner
+```
+
+The container will automatically restart if configured with a restart policy:
+```bash
+docker run -d \
+  --privileged \
+  --restart=unless-stopped \
+  --name gluster-provisioner \
+  ghcr.io/sntns/gluster-provisioner:latest \
+  run
+```
 
 ## Available Commands
 

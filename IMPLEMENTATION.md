@@ -35,7 +35,13 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
 - Monitors both processes continuously
 - Merges logs from both processes to stdout
 - Handles graceful shutdown with signal handlers
-- Exits if either process fails
+- Exits immediately if either process fails (kills the other process and exits with code 1)
+
+**Health Check (healthcheck.sh):**
+- Docker HEALTHCHECK configured with 30-second interval
+- Verifies both `glusterd` and `gluster-provisioner` processes are running
+- Enables automatic restart policies in container orchestrators
+- Provides observable health status via Docker API
 
 ### 2. Dual-Version Tagging System
 
