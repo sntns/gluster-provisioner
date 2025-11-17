@@ -178,3 +178,55 @@ docker run -d \
 - Manual override available via workflow_dispatch
 - Version updates come via PR for review
 - Release process automated via tags
+
+## GlusterFS Peer Discovery Feature
+
+### Problem Statement
+Docker containers running GlusterFS need a way to discover and connect to each other automatically to form a cluster. Previously, peer configuration had to be done manually after containers started.
+
+### Solution
+Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
+
+**Implementation Details:**
+
+1. **New `probe_peers()` function in entrypoint.sh:**
+   - Reads `GLUSTER_PEERS` environment variable (comma-separated list of peer addresses)
+   - Automatically detects and skips self-references by checking:
+     - Current hostname
+     - Current IP address
+     - Hardcoded `localhost` and `127.0.0.1`
+   - Probes each peer using `gluster peer probe` command
+   - Logs success/failure but never fails container startup
+   - Displays peer status after probing completes
+
+2. **Execution Flow:**
+   - GlusterFS daemon starts
+   - Wait 5 seconds for glusterd to be fully ready
+   - Call `probe_peers()` to establish cluster connections
+   - Start gluster-provisioner application
+   - Monitor both processes
+
+3. **Safety Features:**
+   - Self-peer probing is automatically prevented
+   - Failed probes don't crash the container
+   - Works with hostnames, IP addresses, or FQDNs
+   - Handles whitespace and empty entries gracefully
+
+**Benefits:**
+- Zero-configuration cluster formation
+- Works with Docker Compose, Kubernetes, and other orchestrators
+- Safe to include current node in peer list
+- Idempotent - can be run multiple times safely
+
+**Example Usage:**
+```bash
+docker run -d --privileged \
+  -e GLUSTER_PEERS="node1,node2,node3" \
+  ghcr.io/sntns/gluster-provisioner:latest run
+```
+
+**Testing:**
+- Shell script syntax validated
+- Unit tests created for peer detection logic
+- Self-reference detection tested with actual hostname/IP
+- Docker Compose example provided in samples/
