@@ -196,17 +196,25 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
      - Current IP address
      - Hardcoded `localhost` and `127.0.0.1`
    - Probes each peer using `gluster peer probe` command
-   - Logs success/failure but never fails container startup
-   - Displays peer status after probing completes
+   - Runs silently during periodic retries (verbose only on initial probe)
+   - Never fails container startup
 
 2. **Execution Flow:**
    - GlusterFS daemon starts
    - Wait 5 seconds for glusterd to be fully ready
-   - Call `probe_peers()` to establish cluster connections
+   - Call `probe_peers()` to establish initial cluster connections
+   - Display peer status
    - Start gluster-provisioner application
-   - Monitor both processes
+   - Monitor both processes continuously
+   - Retry peer probing every 30 seconds in the monitoring loop
 
-3. **Safety Features:**
+3. **Retry Mechanism:**
+   - Peers are retried every 30 seconds automatically
+   - Discovers late-starting peers without manual intervention
+   - Uses counter-based approach in the monitoring loop
+   - Silent operation during retries (no log spam)
+
+4. **Safety Features:**
    - Self-peer probing is automatically prevented
    - Failed probes don't crash the container
    - Works with hostnames, IP addresses, or FQDNs
@@ -214,9 +222,11 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
 
 **Benefits:**
 - Zero-configuration cluster formation
+- Automatic discovery of late-starting peers (retries every 30 seconds)
 - Works with Docker Compose, Kubernetes, and other orchestrators
 - Safe to include current node in peer list
 - Idempotent - can be run multiple times safely
+- Resilient to network delays and varying startup times
 
 **Example Usage:**
 ```bash
