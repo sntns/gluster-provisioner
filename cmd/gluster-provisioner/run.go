@@ -7,6 +7,7 @@ import (
 	"github.com/sntns/gluster-provisioner/pkg/capability"
 	"github.com/sntns/gluster-provisioner/pkg/device/udev"
 	"github.com/sntns/gluster-provisioner/pkg/disk"
+	"github.com/sntns/gluster-provisioner/pkg/gluster"
 	"github.com/sntns/gluster-provisioner/pkg/metadata"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,7 @@ var runCmd = &cobra.Command{
 			metadata.WithOpenstack(),
 			//metadata.WithFile("./samples/metadata.json"),
 			disk.WithManager(),
+			gluster.WithVolumeManager(),
 		)
 		if err != nil {
 			log.Fatalf("Error running listener: %v", err)

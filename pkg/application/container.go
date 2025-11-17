@@ -9,9 +9,10 @@ import (
 func WithApplication() fx.Option {
 	type provideIn struct {
 		fx.In
-		Logger      capability.Logger
-		DiskManager model.DiskManager
-		Fetcher     model.DiskFetcher
+		Logger        capability.Logger
+		DiskManager   model.DiskManager
+		Fetcher       model.DiskFetcher
+		VolumeManager model.GlusterVolumeManager
 	}
 
 	type provideOut struct {
@@ -20,7 +21,7 @@ func WithApplication() fx.Option {
 	}
 
 	provide := func(in provideIn) provideOut {
-		app := NewApplication(in.Logger, in.DiskManager, in.Fetcher)
+		app := NewApplication(in.Logger, in.DiskManager, in.Fetcher, in.VolumeManager)
 		return provideOut{
 			DeviceListener: app,
 		}
