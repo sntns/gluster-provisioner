@@ -120,6 +120,22 @@ docker run -d \
   run
 ```
 
+### With GlusterFS Peer Configuration
+```bash
+docker run -d \
+  --privileged \
+  --name gluster-provisioner \
+  -e GLUSTER_PEERS="node1.example.com,node2.example.com,192.168.1.10" \
+  ghcr.io/sntns/gluster-provisioner:11.1-1 \
+  run
+```
+
+The `GLUSTER_PEERS` environment variable allows you to specify a comma-separated list of GlusterFS peer addresses. When the container starts:
+- The GlusterFS daemon will probe each peer in the list
+- Self-references (localhost, 127.0.0.1, current hostname/IP) are automatically skipped
+- Failures to probe peers are logged but don't stop container startup
+- Peer status is displayed after probing completes
+
 **Note**: The `--privileged` flag is required for the container to:
 - Manage block devices
 - Start the GlusterFS daemon
@@ -144,6 +160,72 @@ docker run -d \
   --name gluster-provisioner \
   ghcr.io/sntns/gluster-provisioner:latest \
   run
+```
+
+## GlusterFS Cluster Configuration
+
+### Peer Discovery via Environment Variables
+
+The container supports automatic peer probing during startup using the `GLUSTER_PEERS` environment variable. This allows Docker nodes to discover and connect to each other automatically.
+
+**Environment Variable:**
+- `GLUSTER_PEERS` - Comma-separated list of peer addresses (hostnames or IPs)
+
+**Example:**
+```bash
+# On node1
+docker run -d \
+  --privileged \
+  --hostname node1 \
+  --name gluster-provisioner \
+  -e GLUSTER_PEERS="node2,node3,node4" \
+  ghcr.io/sntns/gluster-provisioner:latest \
+  run
+
+# On node2
+docker run -d \
+  --privileged \
+  --hostname node2 \
+  --name gluster-provisioner \
+  -e GLUSTER_PEERS="node1,node3,node4" \
+  ghcr.io/sntns/gluster-provisioner:latest \
+  run
+```
+
+**Behavior:**
+- Peers are probed after the GlusterFS daemon starts
+- Self-references are automatically detected and skipped (safe to include current node)
+- Failed probes are logged but don't prevent container startup
+- Peer status is displayed after probing completes
+- Works with hostnames, IP addresses, or FQDNs
+
+**Docker Compose Example:**
+```yaml
+version: '3.8'
+services:
+  gluster-node1:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    privileged: true
+    hostname: node1
+    environment:
+      - GLUSTER_PEERS=node2,node3
+    command: run
+
+  gluster-node2:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    privileged: true
+    hostname: node2
+    environment:
+      - GLUSTER_PEERS=node1,node3
+    command: run
+
+  gluster-node3:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    privileged: true
+    hostname: node3
+    environment:
+      - GLUSTER_PEERS=node1,node2
+    command: run
 ```
 
 ## Available Commands
