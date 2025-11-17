@@ -1,0 +1,79 @@
+version: '3.8'
+
+# Example Docker Compose configuration for a 3-node GlusterFS cluster
+# Each node will automatically probe the other peers on startup
+
+services:
+  gluster-node1:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    container_name: gluster-node1
+    privileged: true
+    hostname: node1
+    environment:
+      # List of peers - can safely include self (will be skipped)
+      - GLUSTER_PEERS=node1,node2,node3
+    command: run
+    volumes:
+      - gluster1-data:/var/lib/glusterd
+      - gluster1-bricks:/bricks
+    networks:
+      gluster-network:
+        aliases:
+          - node1
+    restart: unless-stopped
+
+  gluster-node2:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    container_name: gluster-node2
+    privileged: true
+    hostname: node2
+    environment:
+      # Alternative: list other peers only (current node auto-detected)
+      - GLUSTER_PEERS=node1,node3
+    command: run
+    volumes:
+      - gluster2-data:/var/lib/glusterd
+      - gluster2-bricks:/bricks
+    networks:
+      gluster-network:
+        aliases:
+          - node2
+    restart: unless-stopped
+
+  gluster-node3:
+    image: ghcr.io/sntns/gluster-provisioner:latest
+    container_name: gluster-node3
+    privileged: true
+    hostname: node3
+    environment:
+      - GLUSTER_PEERS=node1,node2,node3
+    command: run
+    volumes:
+      - gluster3-data:/var/lib/glusterd
+      - gluster3-bricks:/bricks
+    networks:
+      gluster-network:
+        aliases:
+          - node3
+    restart: unless-stopped
+
+volumes:
+  gluster1-data:
+    driver: local
+  gluster1-bricks:
+    driver: local
+  gluster2-data:
+    driver: local
+  gluster2-bricks:
+    driver: local
+  gluster3-data:
+    driver: local
+  gluster3-bricks:
+    driver: local
+
+networks:
+  gluster-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
