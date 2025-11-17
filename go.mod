@@ -6,9 +6,9 @@ require (
 	github.com/diskfs/go-diskfs v1.7.0
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
-	github.com/jochenvg/go-udev v0.0.0-20240801134859-b65ed646224b
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/moby/sys/mount v0.3.4
+	github.com/moby/sys/mountinfo v0.7.2
 	github.com/pilebones/go-udev v0.9.1
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
@@ -26,9 +26,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/jkeiser/iter v0.0.0-20200628201005-c8aa0ae784d1 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pkg/xattr v0.4.12 // indirect
