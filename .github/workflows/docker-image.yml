@@ -5,7 +5,16 @@ on:
     branches:
       - main
     tags:
-      - 'v*.*.*'
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      gluster_version:
+        description: 'GlusterFS version to use (e.g., 11.1)'
+        required: false
+        default: '11.1'
+
+env:
+  GLUSTER_VERSION: '11.1'
 
 jobs:
   build-and-push-main:
@@ -17,16 +26,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Set GlusterFS version
+        id: gluster-version
+        run: |
+          if [ -n "${{ github.event.inputs.gluster_version }}" ]; then
+            echo "version=${{ github.event.inputs.gluster_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ env.GLUSTER_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -35,6 +57,8 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha
+            type=raw,value=${{ steps.gluster-version.outputs.version }}-latest
+      
       - name: Build and push Docker image (multi-arch)
         uses: docker/build-push-action@v5
         with:
@@ -43,6 +67,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GLUSTER_VERSION=${{ steps.gluster-version.outputs.version }}
+            PROVISIONER_VERSION=dev-${{ github.sha }}
 
   build-and-release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -53,21 +80,44 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Extract provisioner version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          echo "provisioner_version=$TAG" >> $GITHUB_OUTPUT
+      
+      - name: Set GlusterFS version
+        id: gluster-version
+        run: |
+          if [ -n "${{ github.event.inputs.gluster_version }}" ]; then
+            echo "version=${{ github.event.inputs.gluster_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ env.GLUSTER_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.gluster-version.outputs.version }}-${{ steps.version.outputs.provisioner_version }}
+      
       - name: Build and push Docker image (multi-arch)
         uses: docker/build-push-action@v5
         with:
@@ -76,10 +126,24 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GLUSTER_VERSION=${{ steps.gluster-version.outputs.version }}
+            PROVISIONER_VERSION=${{ steps.version.outputs.provisioner_version }}
+      
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
+          body: |
+            ## Release ${{ steps.version.outputs.provisioner_version }}
+            
+            **Docker Image Tags:**
+            - `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.provisioner_version }}`
+            - `ghcr.io/${{ github.repository }}:${{ steps.gluster-version.outputs.version }}-${{ steps.version.outputs.provisioner_version }}`
+            
+            **Versions:**
+            - GlusterFS: ${{ steps.gluster-version.outputs.version }}
+            - Provisioner: ${{ steps.version.outputs.provisioner_version }}
           draft: false
           prerelease: false
