@@ -28,7 +28,7 @@ var runCmd = &cobra.Command{
 			metadata.WithOpenstack(),
 			//metadata.WithFile("./samples/metadata.json"),
 			disk.WithManager(),
-			gluster.WithVolumeManager(),
+			gluster.WithManager(),
 		)
 		if err != nil {
 			log.Fatalf("Error running listener: %v", err)

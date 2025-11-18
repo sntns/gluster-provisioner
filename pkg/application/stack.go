@@ -35,7 +35,7 @@ func NewDeviceStack(application *Application, device model.DeviceInfo) *DeviceSt
 		layer.NewPartitioned(application.logger, application.diskManager),
 		layer.NewFormatted(application.logger, application.diskManager),
 		layer.NewMounted(application.logger, application.diskManager),
-		layer.NewGlusterVolume(application.logger, application.volumeManager),
+		layer.NewGlusterd(application.logger, application.glusterManager),
 	}
 
 	state := layer.State{

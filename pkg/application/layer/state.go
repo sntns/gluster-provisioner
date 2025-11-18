@@ -8,10 +8,10 @@ var (
 )
 
 type State struct {
-	Discovered    *DiscoveredState
-	Ready         *ReadyState
-	Partitioned   *PartitionedState
-	Formatted     *FormattedState
-	Mounted       *MountedState
-	GlusterVolume *GlusterVolumeState
+	Discovered  *DiscoveredState
+	Ready       *ReadyState
+	Partitioned *PartitionedState
+	Formatted   *FormattedState
+	Mounted     *MountedState
+	Glusterd    *GlusterdState
 }
