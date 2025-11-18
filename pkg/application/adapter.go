@@ -11,22 +11,22 @@ import (
 
 type Application struct {
 	sync.Mutex
-	logger        capability.Logger
-	diskManager   model.DiskManager
-	fetcher       model.DiskFetcher
-	volumeManager model.GlusterVolumeManager
-	deviceChan    chan model.DeviceInfo
-	cancel        context.CancelFunc
+	logger         capability.Logger
+	diskManager    model.DiskManager
+	fetcher        model.DiskFetcher
+	glusterManager model.GlusterVolumeManager
+	deviceChan     chan model.DeviceInfo
+	cancel         context.CancelFunc
 }
 
-func NewApplication(logger capability.Logger, diskManager model.DiskManager, fetcher model.DiskFetcher, volumeManager model.GlusterVolumeManager) *Application {
+func NewApplication(logger capability.Logger, diskManager model.DiskManager, fetcher model.DiskFetcher, glusterManager model.GlusterVolumeManager) *Application {
 	return &Application{
-		logger:        logger,
-		diskManager:   diskManager,
-		fetcher:       fetcher,
-		volumeManager: volumeManager,
-		deviceChan:    make(chan model.DeviceInfo, 1),
-		cancel:        nil,
+		logger:         logger,
+		diskManager:    diskManager,
+		fetcher:        fetcher,
+		glusterManager: glusterManager,
+		deviceChan:     make(chan model.DeviceInfo, 1),
+		cancel:         nil,
 	}
 }
 

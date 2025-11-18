@@ -6,7 +6,7 @@ import (
 	"go.uber.org/fx"
 )
 
-func WithVolumeManager() fx.Option {
+func WithManager() fx.Option {
 	type provideIn struct {
 		fx.In
 		Logger capability.Logger
@@ -14,13 +14,13 @@ func WithVolumeManager() fx.Option {
 
 	type provideOut struct {
 		fx.Out
-		VolumeManager model.GlusterVolumeManager
+		GlusterManager model.GlusterVolumeManager
 	}
 
 	provide := func(in provideIn) provideOut {
-		manager := NewVolumeManager(in.Logger)
+		manager := NewManager(in.Logger)
 		return provideOut{
-			VolumeManager: manager,
+			GlusterManager: manager,
 		}
 	}
 

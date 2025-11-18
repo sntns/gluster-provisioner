@@ -7,23 +7,23 @@ import (
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
 
-type GlusterVolume struct {
+type Glusterd struct {
 	capability.Logger
-	VolumeManager model.GlusterVolumeManager
+	GlusterManager model.GlusterVolumeManager
 }
 
-type GlusterVolumeState struct {
+type GlusterdState struct {
 	Volumes model.GlusterVolumes
 }
 
-func NewGlusterVolume(logger capability.Logger, manager model.GlusterVolumeManager) *GlusterVolume {
-	return &GlusterVolume{
-		Logger:        logger,
-		VolumeManager: manager,
+func NewGlusterd(logger capability.Logger, manager model.GlusterVolumeManager) *Glusterd {
+	return &Glusterd{
+		Logger:         logger,
+		GlusterManager: manager,
 	}
 }
 
-func (s *GlusterVolume) Up(ctx context.Context, state *State) error {
+func (s *Glusterd) Up(ctx context.Context, state *State) error {
 	mountedState := state.Mounted
 	if mountedState == nil {
 		return ErrInvalidState
@@ -47,7 +47,7 @@ func (s *GlusterVolume) Up(ctx context.Context, state *State) error {
 		s.Info("Creating Gluster volume", fields)
 
 		// Create the volume
-		err := s.VolumeManager.CreateVolume(volumeName, brickPath)
+		err := s.GlusterManager.CreateVolume(volumeName, brickPath)
 		if err != nil {
 			fields["error"] = err
 			s.Error("Failed to create Gluster volume", fields)
@@ -55,7 +55,7 @@ func (s *GlusterVolume) Up(ctx context.Context, state *State) error {
 		}
 
 		// Start the volume
-		err = s.VolumeManager.StartVolume(volumeName)
+		err = s.GlusterManager.StartVolume(volumeName)
 		if err != nil {
 			fields["error"] = err
 			s.Error("Failed to start Gluster volume", fields)
@@ -71,21 +71,21 @@ func (s *GlusterVolume) Up(ctx context.Context, state *State) error {
 		s.Info("Gluster volume created and started", fields)
 	}
 
-	state.GlusterVolume = &GlusterVolumeState{
+	state.Glusterd = &GlusterdState{
 		Volumes: volumes,
 	}
 
 	return nil
 }
 
-func (s *GlusterVolume) Down(ctx context.Context, state *State) error {
+func (s *Glusterd) Down(ctx context.Context, state *State) error {
 	return nil
 }
 
-func (s *GlusterVolume) String() string {
-	return "gluster-volume"
+func (s *Glusterd) String() string {
+	return "glusterd"
 }
 
-func (s *GlusterVolume) Dependencies() []string {
+func (s *Glusterd) Dependencies() []string {
 	return []string{"mounted"}
 }
