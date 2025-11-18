@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/diskfs/go-diskfs v1.7.0
+	github.com/gluster/glusterd2 v4.1.1+incompatible
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -25,7 +26,6 @@ require (
 	github.com/djherbis/times v1.6.0 // indirect
 	github.com/elliotwutingfeng/asciiset v0.0.0-20250912055424-93680c478db2 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/gluster/glusterd2 v4.1.1+incompatible // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
