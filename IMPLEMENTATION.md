@@ -189,32 +189,40 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
 
 **Implementation Details:**
 
-1. **New `probe_peers()` function in entrypoint.sh:**
+1. **New `probe_peers_initial()` function in entrypoint.sh:**
    - Reads `GLUSTER_PEERS` environment variable (comma-separated list of peer addresses)
    - Automatically detects and skips self-references by checking:
      - Current hostname
      - Current IP address
      - Hardcoded `localhost` and `127.0.0.1`
    - Probes each peer using `gluster peer probe` command
-   - Runs silently during periodic retries (verbose only on initial probe)
+   - Tracks failed peers in a global variable for retry
+   - Logs all probe attempts (success and failure)
    - Never fails container startup
 
-2. **Execution Flow:**
+2. **New `retry_failed_peers()` function in entrypoint.sh:**
+   - Only retries peers that failed in previous attempts
+   - Updates the failed peers list after each retry
+   - Removes successfully probed peers from retry list
+   - Logs each retry attempt with status
+
+3. **Execution Flow:**
    - GlusterFS daemon starts
    - Wait 5 seconds for glusterd to be fully ready
-   - Call `probe_peers()` to establish initial cluster connections
-   - Display peer status
+   - Call `probe_peers_initial()` to establish initial cluster connections
+   - Display peer status and list of failed peers (if any)
    - Start gluster-provisioner application
    - Monitor both processes continuously
-   - Retry peer probing every 30 seconds in the monitoring loop
+   - Retry failed peers every 60 seconds in the monitoring loop
 
-3. **Retry Mechanism:**
-   - Peers are retried every 30 seconds automatically
-   - Discovers late-starting peers without manual intervention
-   - Uses counter-based approach in the monitoring loop
-   - Silent operation during retries (no log spam)
+4. **Retry Mechanism:**
+   - Only failed peers are retried (not all peers)
+   - Retry interval: 60 seconds
+   - Uses counter-based approach in the monitoring loop (12 iterations × 5 seconds)
+   - Automatically removes peers from retry list once successfully probed
+   - All retry attempts are logged
 
-4. **Safety Features:**
+5. **Safety Features:**
    - Self-peer probing is automatically prevented
    - Failed probes don't crash the container
    - Works with hostnames, IP addresses, or FQDNs
@@ -222,7 +230,9 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
 
 **Benefits:**
 - Zero-configuration cluster formation
-- Automatic discovery of late-starting peers (retries every 30 seconds)
+- Automatic discovery of late-starting peers (retries every 60 seconds)
+- Efficient: only failed peers are retried
+- Transparent: all probe attempts are logged
 - Works with Docker Compose, Kubernetes, and other orchestrators
 - Safe to include current node in peer list
 - Idempotent - can be run multiple times safely

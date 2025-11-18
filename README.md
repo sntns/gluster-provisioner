@@ -133,8 +133,9 @@ docker run -d \
 The `GLUSTER_PEERS` environment variable allows you to specify a comma-separated list of GlusterFS peer addresses. When the container starts:
 - The GlusterFS daemon will probe each peer in the list
 - Self-references (localhost, 127.0.0.1, current hostname/IP) are automatically skipped
-- Peer probing is retried every 30 seconds to discover peers that start later
-- Failures to probe peers are logged but don't stop container startup
+- Failed peers are automatically retried every 60 seconds until they connect
+- Only failed peers are retried (successful connections are not re-probed)
+- All probe attempts are logged for monitoring
 - Peer status is displayed after initial probing completes
 
 **Note**: The `--privileged` flag is required for the container to:
@@ -195,9 +196,10 @@ docker run -d \
 
 **Behavior:**
 - Peers are probed initially after the GlusterFS daemon starts
-- Peer probing is automatically retried every 30 seconds to discover late-starting peers
+- Failed peers are automatically retried every 60 seconds until they connect
+- Only failed peers are retried (successful connections are not re-probed)
 - Self-references are automatically detected and skipped (safe to include current node)
-- Failed probes are logged but don't prevent container startup
+- All probe attempts are logged for monitoring
 - Peer status is displayed after initial probing completes
 - Works with hostnames, IP addresses, or FQDNs
 
