@@ -39,7 +39,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		return nil
 	}
 	var cancelCtx context.Context
-	cancelCtx, c.cancel = context.WithCancel(ctx)
+	cancelCtx, c.cancel = context.WithCancel(context.Background())
 	// start watching in a separate goroutine
 	go c.watch(cancelCtx, true)
 
