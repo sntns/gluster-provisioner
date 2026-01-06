@@ -28,6 +28,8 @@ FROM gluster-base
 ARG GLUSTER_VERSION
 ARG PROVISIONER_VERSION
 
+WORKDIR /app
+
 # Install additional tools needed by provisioner
 RUN dnf install -y \
     parted \
@@ -38,6 +40,9 @@ RUN dnf install -y \
 
 # Copy the provisioner binary from builder
 COPY --from=builder /gluster-provisioner /usr/local/bin/gluster-provisioner
+
+# Copy default configuration files (expected at ./config by the binary)
+COPY config/ /app/config/
 
 # Copy the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
