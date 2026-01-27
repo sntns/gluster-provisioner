@@ -13,9 +13,6 @@ on:
         required: false
         default: '11.1'
 
-env:
-  GLUSTER_VERSION: '11.1'
-
 jobs:
   build-and-push-main:
     if: github.ref == 'refs/heads/main'
@@ -33,7 +30,8 @@ jobs:
           if [ -n "${{ github.event.inputs.gluster_version }}" ]; then
             echo "version=${{ github.event.inputs.gluster_version }}" >> $GITHUB_OUTPUT
           else
-            echo "version=${{ env.GLUSTER_VERSION }}" >> $GITHUB_OUTPUT
+            DEFAULT=$(cat .github/gluster-version)
+            echo "version=$DEFAULT" >> $GITHUB_OUTPUT
           fi
       
       - name: Set up QEMU
@@ -93,7 +91,8 @@ jobs:
           if [ -n "${{ github.event.inputs.gluster_version }}" ]; then
             echo "version=${{ github.event.inputs.gluster_version }}" >> $GITHUB_OUTPUT
           else
-            echo "version=${{ env.GLUSTER_VERSION }}" >> $GITHUB_OUTPUT
+            DEFAULT=$(cat .github/gluster-version)
+            echo "version=$DEFAULT" >> $GITHUB_OUTPUT
           fi
       
       - name: Set up QEMU

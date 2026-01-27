@@ -19,7 +19,7 @@ jobs:
       - name: Get current GlusterFS version
         id: current-version
         run: |
-          CURRENT=$(grep 'GLUSTER_VERSION' .github/workflows/docker-image.yml | grep -oP "'\K[0-9.]+(?=')" | head -1)
+          CURRENT=$(cat .github/gluster-version | tr -d '\n')
           echo "version=$CURRENT" >> $GITHUB_OUTPUT
           echo "Current GlusterFS version: $CURRENT"
       
@@ -56,7 +56,7 @@ jobs:
         if: steps.compare.outputs.update_needed == 'true'
         run: |
           LATEST="${{ steps.latest-version.outputs.version }}"
-          sed -i "s/GLUSTER_VERSION: '[0-9.]*'/GLUSTER_VERSION: '$LATEST'/" .github/workflows/docker-image.yml
+          echo "$LATEST" > .github/gluster-version
       
       - name: Update Dockerfile default version
         if: steps.compare.outputs.update_needed == 'true'
