@@ -35,6 +35,7 @@ RUN dnf install -y \
     parted \
     e2fsprogs \
     util-linux \
+    hostname \
     udev && \
     dnf clean all
 

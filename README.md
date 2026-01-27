@@ -10,6 +10,7 @@ The Docker image uses a dual-version tagging scheme:
 - Example: `ghcr.io/sntns/gluster-provisioner:11.1-1`
 
 Where:
+
 - `GLUSTER_VERSION` is the version of GlusterFS cluster daemon (e.g., `11.1`)
 - `PROVISIONER_VERSION` is a single-digit version of the gluster-provisioner application (e.g., `1`)
 
@@ -30,6 +31,7 @@ The Docker image is built using a multi-stage build process:
 ### Why CentOS Stream 9?
 
 Alpine Linux does not support GlusterFS due to musl libc compatibility issues. CentOS Stream 9 is used as the base image because:
+
 - Official GlusterFS packages are available
 - Well-tested and supported for GlusterFS deployments
 - Compatible with the Storage SIG repository
@@ -37,6 +39,7 @@ Alpine Linux does not support GlusterFS due to musl libc compatibility issues. C
 ### Health Checks
 
 The Docker image includes a built-in HEALTHCHECK that:
+
 - Runs every 30 seconds
 - Verifies both `glusterd` and `gluster-provisioner` processes are running
 - Has a 10-second timeout per check
@@ -47,11 +50,13 @@ The Docker image includes a built-in HEALTHCHECK that:
 ## Building the Image
 
 ### Default Build
+
 ```bash
 docker build -t gluster-provisioner .
 ```
 
 ### Custom Versions
+
 ```bash
 docker build \
   --build-arg GLUSTER_VERSION=11.1 \
@@ -69,18 +74,21 @@ The repository includes two GitHub Actions workflows:
 #### 1. Docker Image Build and Release (`.github/workflows/docker-image.yml`)
 
 **On pushes to main:**
+
 - Builds and pushes with tags:
   - `latest`
   - `{sha}`
   - `{GLUSTER_VERSION}-latest`
 
 **On version tags (e.g., `v1`):**
+
 - Builds and pushes with tags:
   - `{version}` (e.g., `1`)
   - `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1`)
 - Creates a GitHub Release with version information
 
 **Manual Trigger:**
+
 - Allows specifying custom GlusterFS version via workflow dispatch
 
 #### 2. GlusterFS Version Check (`.github/workflows/check-gluster-version.yml`)
@@ -97,11 +105,13 @@ This workflow automatically checks for new GlusterFS versions:
   4. PR is automatically labeled with `dependencies` and `automated`
 
 **Manual Trigger:**
+
 - Can be run on-demand via workflow dispatch
 
 ## Running the Container
 
 ### Basic Run
+
 ```bash
 docker run -d \
   --privileged \
@@ -111,6 +121,7 @@ docker run -d \
 ```
 
 ### With Custom Configuration
+
 ```bash
 docker run -d \
   --privileged \
@@ -121,6 +132,7 @@ docker run -d \
 ```
 
 ### With GlusterFS Peer Configuration
+
 ```bash
 docker run -d \
   --privileged \
@@ -131,6 +143,7 @@ docker run -d \
 ```
 
 The `GLUSTER_PEERS` environment variable allows you to specify a comma-separated list of GlusterFS peer addresses. When the container starts:
+
 - The GlusterFS daemon will probe each peer in the list
 - Self-references (localhost, 127.0.0.1, current hostname/IP) are automatically skipped
 - Failed peers are automatically retried every 60 seconds until they connect
@@ -139,6 +152,7 @@ The `GLUSTER_PEERS` environment variable allows you to specify a comma-separated
 - Peer status is displayed after initial probing completes
 
 **Note**: The `--privileged` flag is required for the container to:
+
 - Manage block devices
 - Start the GlusterFS daemon
 - Perform disk operations
@@ -146,6 +160,7 @@ The `GLUSTER_PEERS` environment variable allows you to specify a comma-separated
 ### Health Check Monitoring
 
 Check container health status:
+
 ```bash
 # View health status
 docker inspect --format='{{.State.Health.Status}}' gluster-provisioner
@@ -155,6 +170,7 @@ docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' gluster-
 ```
 
 The container will automatically restart if configured with a restart policy:
+
 ```bash
 docker run -d \
   --privileged \
@@ -171,9 +187,11 @@ docker run -d \
 The container supports automatic peer probing during startup using the `GLUSTER_PEERS` environment variable. This allows Docker nodes to discover and connect to each other automatically.
 
 **Environment Variable:**
+
 - `GLUSTER_PEERS` - Comma-separated list of peer addresses (hostnames or IPs)
 
 **Example:**
+
 ```bash
 # On node1
 docker run -d \
@@ -195,6 +213,7 @@ docker run -d \
 ```
 
 **Behavior:**
+
 - Peers are probed initially after the GlusterFS daemon starts
 - Failed peers are automatically retried every 60 seconds until they connect
 - Only failed peers are retried (successful connections are not re-probed)
@@ -204,6 +223,7 @@ docker run -d \
 - Works with hostnames, IP addresses, or FQDNs
 
 **Docker Compose Example:**
+
 ```yaml
 version: '3.8'
 services:
@@ -263,9 +283,11 @@ docker inspect ghcr.io/sntns/gluster-provisioner:11.1-1 | jq '.[0].Config.Labels
 ## Updating GlusterFS Version
 
 ### Automatic Updates
+
 The automated workflow checks for updates weekly and creates PRs.
 
 ### Manual Updates
+
 1. Update `GLUSTER_VERSION` in `Dockerfile`
 2. Update `GLUSTER_VERSION` in `.github/workflows/docker-image.yml`
 3. Commit and push changes
@@ -275,11 +297,13 @@ The automated workflow checks for updates weekly and creates PRs.
 ## Development
 
 ### Prerequisites
+
 - Go 1.24 or later
 - Docker 20.10 or later
 - Access to CentOS/GlusterFS repositories (for building)
 
 ### Local Development
+
 ```bash
 # Build the Go application locally
 cd cmd/gluster-provisioner
@@ -290,6 +314,7 @@ go build -o gluster-provisioner
 ```
 
 ### Testing
+
 ```bash
 # Run Go tests
 go test ./...
@@ -301,13 +326,17 @@ docker build -t test-gluster-provisioner .
 ## Architecture Decisions
 
 ### Multi-Process Container
+
 While generally discouraged, this container runs multiple processes (glusterd + provisioner) because:
+
 1. The provisioner requires a running GlusterFS daemon to function
 2. They are tightly coupled and must run on the same host
 3. The entrypoint script manages both processes appropriately
 
 ### Base Image Choice
+
 CentOS Stream 9 was chosen over Alpine Linux because:
+
 - GlusterFS has no official Alpine packages
 - musl libc incompatibilities prevent building GlusterFS on Alpine
 - CentOS Stream has official GlusterFS support from the Storage SIG
@@ -315,6 +344,7 @@ CentOS Stream 9 was chosen over Alpine Linux because:
 ## Troubleshooting
 
 ### GlusterFS daemon not starting
+
 ```bash
 # Check logs
 docker logs gluster-provisioner
@@ -324,12 +354,19 @@ docker run --privileged ...
 ```
 
 ### Provisioner can't connect to glusterd
+
 The entrypoint script includes a 2-second delay for glusterd startup. If issues persist, you may need to adjust this in `entrypoint.sh`.
 
 ## License
 
-[Add your license information here]
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Contributing
 
-[Add contribution guidelines here]
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+For security-related reports, see [SECURITY.md](SECURITY.md).
+
+## Maintainer / Contact
+
+This repository is maintained by **Sentiens**. For inquiries, contact: `contact@sentiens.fr`.

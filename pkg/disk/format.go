@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
-	"time"
 
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
@@ -21,30 +19,11 @@ func formatPartitions(ctx context.Context, device string, layout model.DiskLayou
 	for i, partLayout := range layout.Partitions {
 		lpart := layout.Partitions[i]
 		path := fmt.Sprintf("/dev/%s", block.Children[i].Name)
-
-		// After partitioning, the kernel/udev may take a moment to create the partition node.
-		// Wait a bit to avoid flaky mkfs failures (e.g., "/dev/vdb1: No such file or directory").
-		deadline := time.Now().Add(10 * time.Second)
-		for {
-			if _, err := os.Stat(path); err == nil {
-				break
-			}
-			if time.Now().After(deadline) {
-				break
-			}
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(500 * time.Millisecond):
-			}
-		}
-
 		switch partLayout.Filesystem {
 		case "ext4":
-			cmd := exec.CommandContext(ctx, "mkfs.ext4", "-L", lpart.Label, path)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return nil, fmt.Errorf("mkfs.ext4 failed for %s: %w: %s", path, err, string(out))
+			cmd := exec.Command("mkfs.ext4", "-L", lpart.Label, path)
+			if err := cmd.Run(); err != nil {
+				return nil, err
 			}
 			filesystems = append(filesystems, model.Filesystem{
 				Label: partLayout.Label,

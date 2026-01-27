@@ -1,0 +1,23 @@
+# Go build outputs
+/gluster-provisioner
+/**/*.exe
+/**/*.dll
+/**/*.so
+/**/*.dylib
+
+# Go workspace / test artifacts
+*.test
+*.out
+coverage.*
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
+
+# Optional local env/config overrides
+.env
+*.local
+
+# Docker compose overrides
+/docker-compose.override.yml

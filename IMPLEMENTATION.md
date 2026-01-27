@@ -1,7 +1,9 @@
 # Implementation Summary
 
 ## Problem Statement
+
 The Docker image must run both the GlusterFS cluster daemon and the gluster-provisioner code simultaneously. The Docker image should be tagged with `v1-v2` format where:
+
 - v1 = GlusterFS cluster version
 - v2 = provisioner version (single digit)
 
@@ -12,6 +14,7 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
 ### 1. Multi-Daemon Docker Setup
 
 **Dockerfile Changes:**
+
 - Switched from Alpine Linux to CentOS Stream 9 base image
   - Reason: GlusterFS is not available on Alpine due to musl libc incompatibilities
   - CentOS Stream 9 provides official GlusterFS packages via Storage SIG
@@ -30,6 +33,7 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
   - `provisioner.version`
 
 **Entrypoint Script (entrypoint.sh):**
+
 - Starts GlusterFS daemon in background with `--no-daemon` flag
 - Starts gluster-provisioner in background
 - Monitors both processes continuously
@@ -38,6 +42,7 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
 - Exits immediately if either process fails (kills the other process and exits with code 1)
 
 **Health Check (healthcheck.sh):**
+
 - Docker HEALTHCHECK configured with 30-second interval
 - Verifies both `glusterd` and `gluster-provisioner` processes are running
 - Enables automatic restart policies in container orchestrators
@@ -48,15 +53,18 @@ Additionally, create a CI pipeline that automatically updates the cluster versio
 Implemented in `.github/workflows/docker-image.yml`:
 
 **For main branch pushes:**
+
 - `latest`
 - `sha-{git-sha}`
 - `{GLUSTER_VERSION}-latest` (e.g., `11.1-latest`)
 
 **For version tag pushes (e.g., v1):**
+
 - `{version}` (e.g., `1`)
 - `{GLUSTER_VERSION}-{version}` (e.g., `11.1-1`) ✅ **This is the v1-v2 format**
 
 **Manual workflow dispatch:**
+
 - Allows specifying custom GLUSTER_VERSION parameter
 - Useful for testing different GlusterFS versions
 
@@ -65,6 +73,7 @@ Implemented in `.github/workflows/docker-image.yml`:
 Created `.github/workflows/check-gluster-version.yml`:
 
 **Features:**
+
 - Runs weekly (every Monday at 9:00 AM UTC)
 - Can be triggered manually via workflow_dispatch
 - Checks GlusterFS GitHub repository for latest releases
@@ -76,6 +85,7 @@ Created `.github/workflows/check-gluster-version.yml`:
   - Labels PR with `dependencies` and `automated`
 
 **PR Content:**
+
 - Clear description of version change
 - Instructions for testing
 - Automatic branch creation and cleanup
@@ -83,6 +93,7 @@ Created `.github/workflows/check-gluster-version.yml`:
 ### 4. Documentation & Best Practices
 
 **README.md:**
+
 - Comprehensive documentation covering:
   - Architecture explanation
   - Build instructions
@@ -93,6 +104,7 @@ Created `.github/workflows/check-gluster-version.yml`:
   - Development guidelines
 
 **.dockerignore:**
+
 - Excludes unnecessary files from Docker build context
 - Reduces image size and build time
 - Excludes: .git, .github, test files, IDE files, etc.
@@ -109,20 +121,25 @@ Created `.github/workflows/check-gluster-version.yml`:
 ## Technical Decisions
 
 ### Why CentOS Stream 9?
+
 - GlusterFS requires glibc (not available in Alpine's musl)
 - Official GlusterFS packages available via CentOS Storage SIG
 - Well-tested base for GlusterFS deployments
 - Active support and updates
 
 ### Why Multi-Process Container?
+
 While generally discouraged, this is justified because:
+
 - Provisioner requires a running GlusterFS daemon
 - They are tightly coupled components
 - Both must run on the same host
 - Entrypoint manages lifecycle properly
 
 ### Version Format Choice
+
 The `{GLUSTER_VERSION}-{PROVISIONER_VERSION}` format:
+
 - Clearly communicates both component versions
 - Allows users to understand compatibility
 - Enables selective upgrades
@@ -182,9 +199,11 @@ docker run -d \
 ## GlusterFS Peer Discovery Feature
 
 ### Problem Statement
+
 Docker containers running GlusterFS need a way to discover and connect to each other automatically to form a cluster. Previously, peer configuration had to be done manually after containers started.
 
 ### Solution
+
 Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
 
 **Implementation Details:**
@@ -229,6 +248,7 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
    - Handles whitespace and empty entries gracefully
 
 **Benefits:**
+
 - Zero-configuration cluster formation
 - Automatic discovery of late-starting peers (retries every 60 seconds)
 - Efficient: only failed peers are retried
@@ -239,6 +259,7 @@ Added automatic peer probing via the `GLUSTER_PEERS` environment variable.
 - Resilient to network delays and varying startup times
 
 **Example Usage:**
+
 ```bash
 docker run -d --privileged \
   -e GLUSTER_PEERS="node1,node2,node3" \
@@ -246,6 +267,7 @@ docker run -d --privileged \
 ```
 
 **Testing:**
+
 - Shell script syntax validated
 - Unit tests created for peer detection logic
 - Self-reference detection tested with actual hostname/IP
