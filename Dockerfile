@@ -36,7 +36,9 @@ RUN dnf install -y \
     e2fsprogs \
     util-linux \
     hostname \
-    udev && \
+    udev \
+    samba \
+    which && \
     dnf clean all
 
 # Copy the provisioner binary from builder
