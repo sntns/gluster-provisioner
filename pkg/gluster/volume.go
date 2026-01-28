@@ -3,9 +3,9 @@ package gluster
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
-	"github.com/gluster/glusterd2/pkg/api"
-	"github.com/gluster/glusterd2/pkg/restclient"
 	"github.com/sntns/gluster-provisioner/pkg/capability"
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
@@ -14,19 +14,12 @@ var _ model.GlusterVolumeManager = &Manager{}
 
 type Manager struct {
 	capability.Logger
-	client *restclient.Client
 }
 
-// NewManager creates a new Gluster manager using glusterd2 REST client
-// It connects to the local glusterd2 REST API endpoint
+// NewManager creates a new Gluster manager using the gluster CLI
 func NewManager(logger capability.Logger) *Manager {
-	// Connect to local glusterd2 REST API
-	// Default glusterd2 REST endpoint is http://localhost:24007
-	client := restclient.New("http://localhost:24007", "", "", "", true)
-
 	return &Manager{
 		Logger: logger,
-		client: client,
 	}
 }
 
@@ -53,45 +46,28 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 	}
 
 	// Check if volume already exists
-	volumes, err := m.client.Volumes(volumeName)
-	if err == nil && len(volumes) > 0 {
-		// Volume already exists
+	if err := m.volumeExists(volumeName); err == nil {
 		m.Info("Gluster volume already exists", fields)
 		return nil
 	}
 
-	// Create volume request
-	// We'll get peer ID from the local peer info
-	peerID := hostname // Using hostname as peer identifier for now
-
-	req := api.VolCreateReq{
-		Name: volumeName,
-		Subvols: []api.SubvolReq{
-			{
-				Type: "distribute",
-				Bricks: []api.BrickReq{
-					{
-						PeerID: peerID,
-						Path:   brickPath,
-					},
-				},
-			},
-		},
-		Force: true,
-		Flags: map[string]bool{
-			"create-brick-dir": true,
-		},
-	}
-
-	// Create the volume using REST API
-	_, err = m.client.VolumeCreate(req)
-	if err != nil {
+	brick := fmt.Sprintf("%s:%s", hostname, brickPath)
+	cmd := exec.Command(
+		"gluster",
+		"volume",
+		"create",
+		volumeName,
+		brick,
+		"force",
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
 		fields["error"] = err
+		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to create Gluster volume", fields)
 		return fmt.Errorf("failed to create gluster volume: %w", err)
 	}
 
-	fields["peer_id"] = peerID
+	fields["brick"] = brick
 	m.Info("Gluster volume created successfully", fields)
 	return nil
 }
@@ -102,22 +78,36 @@ func (m *Manager) StartVolume(volumeName string) error {
 		"volume": volumeName,
 	}
 
-	// Check if volume is already started
-	status, err := m.client.VolumeStatus(volumeName)
-	if err == nil && status.Info.State == api.VolStarted {
-		// Volume is already running
+	if running, err := m.volumeStarted(volumeName); err == nil && running {
 		m.Info("Gluster volume already started", fields)
 		return nil
 	}
 
-	// Start the volume using REST API
-	err = m.client.VolumeStart(volumeName, false)
-	if err != nil {
+	cmd := exec.Command("gluster", "volume", "start", volumeName, "force")
+	if output, err := cmd.CombinedOutput(); err != nil {
 		fields["error"] = err
+		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to start Gluster volume", fields)
 		return fmt.Errorf("failed to start gluster volume: %w", err)
 	}
 
 	m.Info("Gluster volume started successfully", fields)
 	return nil
+}
+
+func (m *Manager) volumeExists(volumeName string) error {
+	cmd := exec.Command("gluster", "volume", "info", volumeName)
+	if _, err := cmd.CombinedOutput(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) volumeStarted(volumeName string) (bool, error) {
+	cmd := exec.Command("gluster", "volume", "status", volumeName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, err
+	}
+	return len(strings.TrimSpace(string(output))) > 0, nil
 }
