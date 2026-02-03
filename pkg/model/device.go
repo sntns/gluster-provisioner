@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type DeviceListener interface {
 	DeviceChan() chan DeviceInfo
@@ -17,6 +20,9 @@ type DeviceInfo struct {
 }
 
 func (d DeviceInfo) DevName() string {
+	if strings.HasPrefix(d.Name, "/dev/") {
+		return d.Name
+	}
 	return fmt.Sprintf("/dev/%s", d.Name)
 }
 
