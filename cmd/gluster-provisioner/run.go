@@ -8,7 +8,7 @@ import (
 	"github.com/sntns/gluster-provisioner/pkg/device/udev"
 	"github.com/sntns/gluster-provisioner/pkg/disk"
 	"github.com/sntns/gluster-provisioner/pkg/gluster"
-	"github.com/sntns/gluster-provisioner/pkg/metadata"
+	"github.com/sntns/gluster-provisioner/pkg/metadata/openstack"
 	"github.com/spf13/cobra"
 )
 
@@ -23,10 +23,8 @@ var runCmd = &cobra.Command{
 				capability.ViperLoaderWithFileType("yaml"),
 			),
 			application.WithApplication(),
-			//http.WithDeviceHttp(),
 			udev.WithUdev(),
-			metadata.WithOpenstack(),
-			//metadata.WithFile("./samples/metadata.json"),
+			openstack.WithOpenstack(),
 			disk.WithManager(),
 			gluster.WithManager(),
 		)

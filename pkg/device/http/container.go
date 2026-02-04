@@ -15,7 +15,7 @@ func WithDeviceHttp() fx.Option {
 		Listener model.DeviceListener
 	}
 
-	invoke := func(in invokeIn) error {
+	invoke := func(in invokeIn) (err error) {
 		// Provide a default configuration with no filters
 		defaultConfig := Configuration{
 			Filters: device.Filters{

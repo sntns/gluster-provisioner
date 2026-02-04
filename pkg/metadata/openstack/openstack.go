@@ -1,4 +1,4 @@
-package metadata
+package openstack
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sntns/gluster-provisioner/pkg/capability"
+	"github.com/sntns/gluster-provisioner/pkg/metadata"
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
 
@@ -75,9 +76,9 @@ func (f *OpenStackFetcher) fetchOnce(ctx context.Context, device model.DeviceInf
 	if err != nil {
 		return nil, err
 	}
-	var meta Meta
+	var meta metadata.Meta
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return nil, err
 	}
-	return match(meta, device)
+	return metadata.Match(meta, device)
 }

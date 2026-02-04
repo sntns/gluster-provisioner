@@ -9,6 +9,7 @@ import (
 func WithManager() fx.Option {
 	type provideIn struct {
 		fx.In
+		Loader capability.Loader `name:"configuration"`
 		Logger capability.Logger
 	}
 
@@ -17,11 +18,17 @@ func WithManager() fx.Option {
 		GlusterManager model.GlusterVolumeManager
 	}
 
-	provide := func(in provideIn) provideOut {
-		manager := NewManager(in.Logger)
-		return provideOut{
-			GlusterManager: manager,
+	provide := func(in provideIn) (out provideOut, err error) {
+		configuration := Configuration{}
+		if err = in.Loader.Load("gluster.volume", &configuration); err != nil {
+			return
 		}
+		if err = configuration.Validate(); err != nil {
+			return
+		}
+		manager := NewManager(in.Logger, configuration)
+		out.GlusterManager = manager
+		return
 	}
 
 	return fx.Provide(provide)

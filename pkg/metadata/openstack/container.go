@@ -1,4 +1,4 @@
-package disk
+package openstack
 
 import (
 	"github.com/sntns/gluster-provisioner/pkg/capability"
@@ -6,7 +6,8 @@ import (
 	"go.uber.org/fx"
 )
 
-func WithManager() fx.Option {
+// WithOpenstack returns a Fetcher for OpenStack metadata
+func WithOpenstack() fx.Option {
 	type provideIn struct {
 		fx.In
 		Logger capability.Logger
@@ -14,11 +15,11 @@ func WithManager() fx.Option {
 
 	type provideOut struct {
 		fx.Out
-		Manager model.DiskManager
+		Fetcher model.DiskFetcher
 	}
 
 	provide := func(in provideIn) (out provideOut) {
-		out.Manager = NewManager(in.Logger)
+		out.Fetcher = NewOpenStackFetcher(in.Logger)
 		return
 	}
 

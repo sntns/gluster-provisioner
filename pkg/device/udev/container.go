@@ -25,8 +25,7 @@ func WithUdev() fx.Option {
 		Listener model.DeviceListener
 	}
 
-	invoke := func(in invokeIn) error {
-		var err error
+	invoke := func(in invokeIn) (err error) {
 		configuration := Configuration{}
 		if err = in.Loader.Load("adapter.udev", &configuration); err != nil {
 			return err

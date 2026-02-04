@@ -14,12 +14,14 @@ var _ model.GlusterVolumeManager = &Manager{}
 
 type Manager struct {
 	capability.Logger
+	config Configuration
 }
 
 // NewManager creates a new Gluster manager using the gluster CLI
-func NewManager(logger capability.Logger) *Manager {
+func NewManager(logger capability.Logger, config Configuration) *Manager {
 	return &Manager{
 		Logger: logger,
+		config: config,
 	}
 }
 
@@ -37,21 +39,13 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 		return fmt.Errorf("failed to create brick directory: %w", err)
 	}
 
-	// Get the hostname for the brick specification
-	hostname, err := os.Hostname()
-	if err != nil {
-		fields["error"] = err
-		m.Error("Failed to get hostname", fields)
-		return fmt.Errorf("failed to get hostname: %w", err)
-	}
-
 	// Check if volume already exists
 	if err := m.volumeExists(volumeName); err == nil {
 		m.Info("Gluster volume already exists", fields)
 		return nil
 	}
 
-	brick := fmt.Sprintf("%s:%s", hostname, brickPath)
+	brick := fmt.Sprintf("%s:%s", m.config.Host, brickPath)
 	cmd := exec.Command(
 		"gluster",
 		"volume",

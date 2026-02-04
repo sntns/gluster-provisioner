@@ -20,11 +20,10 @@ func WithApplication() fx.Option {
 		DeviceListener model.DeviceListener
 	}
 
-	provide := func(in provideIn) provideOut {
+	provide := func(in provideIn) (out provideOut) {
 		app := NewApplication(in.Logger, in.DiskManager, in.Fetcher, in.GlusterManager)
-		return provideOut{
-			DeviceListener: app,
-		}
+		out.DeviceListener = app
+		return
 	}
 
 	return fx.Provide(provide)

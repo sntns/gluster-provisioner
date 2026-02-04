@@ -8,7 +8,7 @@ import (
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
 
-func match(meta Meta, device model.DeviceInfo) (*model.DiskMetadata, error) {
+func Match(meta Meta, device model.DeviceInfo) (*model.DiskMetadata, error) {
 	// Depending on the udev source, the kernel object path may be provided as
 	// "/devices/..." (kobject) instead of a full sysfs path "/sys/devices/...".
 	// OpenStack metadata matching uses sysfs paths, so normalize here.

@@ -1,4 +1,4 @@
-package metadata
+package file
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/sntns/gluster-provisioner/pkg/capability"
+	"github.com/sntns/gluster-provisioner/pkg/metadata"
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
 
@@ -38,11 +39,11 @@ func (f *FileFetcher) DiskFetchContext(ctx context.Context, device model.DeviceI
 	if err != nil {
 		return nil, err
 	}
-	var meta Meta
+	var meta metadata.Meta
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return nil, err
 	}
-	metadata, err := match(meta, device)
+	metadata, err := metadata.Match(meta, device)
 	if err != nil {
 		return nil, err
 	}
