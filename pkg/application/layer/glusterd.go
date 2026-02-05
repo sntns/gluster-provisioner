@@ -2,6 +2,7 @@ package layer
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 
 	"github.com/sntns/gluster-provisioner/pkg/capability"
@@ -49,20 +50,31 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 
 		s.Info("Creating Gluster volume", fields)
 
-		// Create the volume
-		err := s.GlusterManager.CreateVolume(volumeName, brickPath)
+		hostname, err := os.Hostname()
 		if err != nil {
 			fields["error"] = err
-			s.Error("Failed to create Gluster volume", fields)
+			s.Error("Failed to get hostname", fields)
 			return err
 		}
 
-		// Start the volume
-		err = s.GlusterManager.StartVolume(volumeName)
-		if err != nil {
-			fields["error"] = err
-			s.Error("Failed to start Gluster volume", fields)
-			return err
+		if hostname == "eu2-sntns-docker-1.novalocal" {
+			s.Info("Running on Gluster node, creating and starting volume", fields)
+
+			// Create the volume
+			err = s.GlusterManager.CreateVolume(volumeName, brickPath)
+			if err != nil {
+				fields["error"] = err
+				s.Error("Failed to create Gluster volume", fields)
+				return err
+			}
+
+			// Start the volume
+			err = s.GlusterManager.StartVolume(volumeName)
+			if err != nil {
+				fields["error"] = err
+				s.Error("Failed to start Gluster volume", fields)
+				return err
+			}
 		}
 
 		// Mount the volume via FUSE so the host can access it through the shared bind mount.
