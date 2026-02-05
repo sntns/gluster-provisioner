@@ -105,10 +105,7 @@ func (m *Manager) StartVolume(volumeName string) error {
 	return nil
 }
 
-// MountVolume mounts a Gluster volume via FUSE using the glusterfs client.
-//
-// The mount is expected to be performed inside the container mount namespace and propagated
-// to the host via a shared bind mount (e.g. /mnt/gluster:/media:rshared).
+// MountVolume mounts a Gluster volume via the system mount helper.
 func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 	fields := map[string]interface{}{
 		"volume":      volumeName,
@@ -133,22 +130,15 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 		return nil
 	}
 
-	server := "127.0.0.1"
-	fields["server"] = server
+	source := fmt.Sprintf("127.0.0.1:/%s", volumeName)
+	fields["source"] = source
 
-	args := []string{
-		"--volfile-server", server,
-		"--volfile-id", volumeName,
-		"--background",
-		mountPoint,
-	}
-
-	cmd := exec.Command("glusterfs", args...)
+	cmd := exec.Command("mount", "-t", "glusterfs", source, mountPoint)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
-		m.Error("Failed to mount Gluster volume via FUSE", fields)
-		return fmt.Errorf("failed to mount gluster volume via fuse: %w", err)
+		m.Error("Failed to mount Gluster volume", fields)
+		return fmt.Errorf("failed to mount gluster volume: %w", err)
 	}
 
 	fields["mount_point_base"] = filepath.Dir(mountPoint)

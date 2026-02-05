@@ -41,7 +41,7 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 	for _, mountpoint := range mountedState.Mountpoints {
 		volumeName := mountpoint.Label
 		brickPath := mountpoint.Path + "/brick"
-		mountPoint := filepath.Join("/media/gluster", volumeName)
+		mountPoint := filepath.Join("/mnt/gluster", volumeName)
 
 		fields["volume"] = volumeName
 		fields["brick_path"] = brickPath
@@ -79,7 +79,7 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 			Started:   true,
 		})
 
-		s.Info("Gluster volume created and started", fields)
+		s.Info("Gluster volume created, started, and mounted successfully", fields)
 	}
 
 	state.Glusterd = &GlusterdState{
