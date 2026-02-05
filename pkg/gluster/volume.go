@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/moby/sys/mountinfo"
 	"github.com/sntns/gluster-provisioner/pkg/capability"
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
@@ -14,14 +16,12 @@ var _ model.GlusterVolumeManager = &Manager{}
 
 type Manager struct {
 	capability.Logger
-	config Configuration
 }
 
 // NewManager creates a new Gluster manager using the gluster CLI
-func NewManager(logger capability.Logger, config Configuration) *Manager {
+func NewManager(logger capability.Logger) *Manager {
 	return &Manager{
 		Logger: logger,
-		config: config,
 	}
 }
 
@@ -45,15 +45,31 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 		return nil
 	}
 
-	brick := fmt.Sprintf("%s:%s", m.config.Host, brickPath)
-	cmd := exec.Command(
-		"gluster",
+	rawPeers := os.Getenv("GLUSTER_PEERS")
+	if rawPeers == "" {
+		err := fmt.Errorf("GLUSTER_PEERS environment variable is not set")
+		fields["error"] = err
+		m.Error("Failed to get Gluster peers", fields)
+		return err
+	}
+	peers := strings.Split(rawPeers, ",")
+
+	bricks := []string{}
+	for _, peer := range peers {
+		bricks = append(bricks, fmt.Sprintf("%s:%s", peer, brickPath))
+	}
+
+	args := []string{
 		"volume",
 		"create",
 		volumeName,
-		brick,
-		"force",
-	)
+		"replica",
+		fmt.Sprintf("%d", len(bricks)),
+	}
+	args = append(args, bricks...)
+	args = append(args, "force")
+
+	cmd := exec.Command("gluster", args...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
@@ -61,7 +77,7 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 		return fmt.Errorf("failed to create gluster volume: %w", err)
 	}
 
-	fields["brick"] = brick
+	fields["bricks"] = bricks
 	m.Info("Gluster volume created successfully", fields)
 	return nil
 }
@@ -89,6 +105,57 @@ func (m *Manager) StartVolume(volumeName string) error {
 	return nil
 }
 
+// MountVolume mounts a Gluster volume via FUSE using the glusterfs client.
+//
+// The mount is expected to be performed inside the container mount namespace and propagated
+// to the host via a shared bind mount (e.g. /mnt/gluster:/media:rshared).
+func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
+	fields := map[string]interface{}{
+		"volume":      volumeName,
+		"mount_point": mountPoint,
+	}
+
+	// Basic preflight: FUSE device must exist.
+	if _, err := os.Stat("/dev/fuse"); err != nil {
+		fields["error"] = err
+		m.Error("FUSE device not available (/dev/fuse)", fields)
+		return fmt.Errorf("fuse device not available (/dev/fuse): %w", err)
+	}
+
+	if err := os.MkdirAll(mountPoint, 0o755); err != nil {
+		fields["error"] = err
+		m.Error("Failed to create Gluster mount point", fields)
+		return fmt.Errorf("failed to create gluster mount point: %w", err)
+	}
+
+	if mounted, err := m.mountPointMounted(mountPoint); err == nil && mounted {
+		m.Info("Gluster volume already mounted", fields)
+		return nil
+	}
+
+	server := "127.0.0.1"
+	fields["server"] = server
+
+	args := []string{
+		"--volfile-server", server,
+		"--volfile-id", volumeName,
+		"--background",
+		mountPoint,
+	}
+
+	cmd := exec.Command("glusterfs", args...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fields["error"] = err
+		fields["output"] = strings.TrimSpace(string(output))
+		m.Error("Failed to mount Gluster volume via FUSE", fields)
+		return fmt.Errorf("failed to mount gluster volume via fuse: %w", err)
+	}
+
+	fields["mount_point_base"] = filepath.Dir(mountPoint)
+	m.Info("Gluster volume mounted successfully", fields)
+	return nil
+}
+
 func (m *Manager) volumeExists(volumeName string) error {
 	cmd := exec.Command("gluster", "volume", "info", volumeName)
 	if _, err := cmd.CombinedOutput(); err != nil {
@@ -104,4 +171,17 @@ func (m *Manager) volumeStarted(volumeName string) (bool, error) {
 		return false, err
 	}
 	return len(strings.TrimSpace(string(output))) > 0, nil
+}
+
+func (m *Manager) mountPointMounted(mountPoint string) (bool, error) {
+	info, err := mountinfo.GetMounts(nil)
+	if err != nil {
+		return false, err
+	}
+	for _, mi := range info {
+		if mi.Mountpoint == mountPoint {
+			return true, nil
+		}
+	}
+	return false, nil
 }
