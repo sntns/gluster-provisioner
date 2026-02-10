@@ -31,151 +31,131 @@ func NewGlusterd(logger capability.Logger, manager model.GlusterVolumeManager) *
 }
 
 func (s *Glusterd) Up(ctx context.Context, state *State) error {
-	mountedState := state.Mounted
-	if mountedState == nil {
+	if state.Mounted == nil {
 		return ErrInvalidState
 	}
 
-	fields := map[string]interface{}{
-		"device":      mountedState.Device,
-		"mountpoints": len(mountedState.Mountpoints),
-	}
-
-	rawEndpoints := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS"))
-	if rawEndpoints == "" {
-		err := fmt.Errorf("ETCD_ENDPOINTS must be set (comma-separated)")
-		fields["error"] = err
-		s.Error("Missing ETCD configuration", fields)
-		return err
-	}
-
-	endpoints := strings.Split(rawEndpoints, ",")
-
-	fields["etcd_endpoints"] = endpoints
-
-	etcdClient, err := clientv3.New(clientv3.Config{
-		Endpoints: endpoints,
-	})
+	cli, sess, err := initEtcd()
 	if err != nil {
-		fields["error"] = err
-		s.Error("Failed to create etcd client", fields)
 		return err
 	}
-	defer func() { _ = etcdClient.Close() }()
+	defer cli.Close()
+	defer sess.Close()
 
-	etcdSession, err := concurrency.NewSession(etcdClient)
-	if err != nil {
-		fields["error"] = err
-		s.Error("Failed to create etcd session", fields)
-		return err
-	}
-	defer func() { _ = etcdSession.Close() }()
+	var vols model.GlusterVolumes
 
-	var volumes model.GlusterVolumes
-	for _, mountpoint := range mountedState.Mountpoints {
-		volumeName := mountpoint.Label
-		brickPath := mountpoint.Path + "/brick"
-		mountPoint := filepath.Join("/mnt/gluster", volumeName)
-
-		fields["volume"] = volumeName
-		fields["brick_path"] = brickPath
-		fields["mount_point"] = mountPoint
-
-		s.Info("Creating Gluster volume", fields)
-
-		hostname, err := os.Hostname()
+	for _, mp := range state.Mounted.Mountpoints {
+		v, err := s.reconcileVolume(
+			ctx,
+			cli,
+			sess,
+			mp,
+			len(state.Mounted.Mountpoints),
+		)
 		if err != nil {
-			fields["error"] = err
-			s.Error("Failed to get hostname", fields)
 			return err
 		}
 
-		if err := os.MkdirAll(brickPath, 0o755); err != nil {
-			fields["error"] = err
-			s.Error("Failed to create brick directory", fields)
-			return fmt.Errorf("failed to create brick directory: %w", err)
-		}
-
-		readyCtx, cancelReady := context.WithTimeout(ctx, 10*time.Minute)
-		defer cancelReady()
-
-		if err := etcdMarkReady(readyCtx, etcdClient, "/gluster", volumeName, hostname, brickPath); err != nil {
-			fields["error"] = err
-			s.Error("Failed to mark node ready in etcd", fields)
-			return err
-		}
-
-		if err := etcdWaitForReady(readyCtx, etcdClient, "/gluster", volumeName, len(endpoints)); err != nil {
-			fields["error"] = err
-			s.Error("Timeout waiting for all nodes to become ready", fields)
-			return err
-		}
-
-		mutex := concurrency.NewMutex(etcdSession, "/gluster/mutex/"+volumeName)
-		lockCtx, cancelLock := context.WithTimeout(ctx, 10*time.Minute)
-		defer cancelLock()
-
-		if err := mutex.Lock(lockCtx); err != nil {
-			fields["error"] = err
-			s.Error("Failed to acquire distributed lock", fields)
-			return err
-		}
-		s.Info("Acquired distributed lock for volume operations", fields)
-		if err := func() error {
-			defer func() { _ = mutex.Unlock(context.Background()) }()
-
-			exists := s.GlusterManager.VolumeExists(volumeName)
-			if !exists {
-				s.Info("Creating Gluster volume (leader via lock)", fields)
-				if err := s.GlusterManager.CreateVolume(volumeName, brickPath); err != nil {
-					return err
-				}
-			}
-
-			started := s.GlusterManager.VolumeStarted(volumeName)
-			if !started {
-				s.Info("Starting Gluster volume (leader via lock)", fields)
-				if err := s.GlusterManager.StartVolume(volumeName); err != nil {
-					return err
-				}
-			}
-			return nil
-		}(); err != nil {
-			fields["error"] = err
-			s.Error("Failed to create/start volume within distributed lock", fields)
-			return err
-		}
-
-		waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Minute)
-		defer cancelWait()
-		if err := waitForVolumeReady(waitCtx, s.GlusterManager, volumeName); err != nil {
-			fields["error"] = err
-			s.Error("Volume did not become ready in time", fields)
-			return err
-		}
-
-		// Mount the volume via FUSE so the host can access it through the shared bind mount.
-		err = s.GlusterManager.MountVolume(volumeName, mountPoint)
-		if err != nil {
-			fields["error"] = err
-			s.Error("Failed to mount Gluster volume via FUSE", fields)
-			return err
-		}
-
-		volumes = append(volumes, model.GlusterVolume{
-			Name:      volumeName,
-			BrickPath: brickPath,
-			Started:   true,
-		})
-
-		s.Info("Gluster volume created, started, and mounted successfully", fields)
+		vols = append(vols, v)
 	}
 
 	state.Glusterd = &GlusterdState{
-		Volumes: volumes,
+		Volumes: vols,
 	}
 
 	return nil
+}
+
+func initEtcd() (*clientv3.Client, *concurrency.Session, error) {
+	raw := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS"))
+	if raw == "" {
+		return nil, nil, fmt.Errorf("ETCD_ENDPOINTS must be set")
+	}
+
+	endpoints := strings.Split(raw, ",")
+
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints: endpoints,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sess, err := concurrency.NewSession(cli)
+	if err != nil {
+		cli.Close()
+		return nil, nil, err
+	}
+
+	return cli, sess, nil
+}
+
+func (s *Glusterd) reconcileVolume(ctx context.Context, cli *clientv3.Client, sess *concurrency.Session, mp model.Mountpoint, expectedNodes int) (model.GlusterVolume, error) {
+
+	volume := mp.Label
+	brick := mp.Path + "/brick"
+	mount := filepath.Join("/mnt/gluster", volume)
+
+	fields := map[string]any{
+		"volume": volume,
+	}
+
+	host, _ := os.Hostname()
+
+	if err := os.MkdirAll(brick, 0755); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	if err := etcdMarkReady(readyCtx, cli, "/gluster", volume, host, brick); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	if err := etcdWaitForReady(readyCtx, cli, "/gluster", volume, expectedNodes); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	mutex := concurrency.NewMutex(sess, "/gluster/mutex/"+volume)
+
+	lockCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	if err := mutex.Lock(lockCtx); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	func() {
+		defer mutex.Unlock(context.Background())
+
+		if !s.GlusterManager.VolumeExists(volume) {
+			s.GlusterManager.CreateVolume(volume, brick)
+		}
+
+		if !s.GlusterManager.VolumeStarted(volume) {
+			s.GlusterManager.StartVolume(volume)
+		}
+	}()
+
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	if err := waitForVolumeReady(waitCtx, s.GlusterManager, volume); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	if err := s.GlusterManager.EnsureMounted(volume, mount); err != nil {
+		return model.GlusterVolume{}, err
+	}
+
+	s.Info("Volume reconciled", fields)
+
+	return model.GlusterVolume{
+		Name:      volume,
+		BrickPath: brick,
+		Started:   true,
+	}, nil
 }
 
 func etcdMarkReady(ctx context.Context, cli *clientv3.Client, prefix, volumeName, nodeID, brickPath string) error {

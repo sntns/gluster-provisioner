@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/moby/sys/mountinfo"
 	"github.com/sntns/gluster-provisioner/pkg/capability"
 	"github.com/sntns/gluster-provisioner/pkg/model"
 )
@@ -106,76 +104,57 @@ func (m *Manager) StartVolume(volumeName string) error {
 	return nil
 }
 
-// MountVolume mounts a Gluster volume via the system mount helper.
-func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
+func (m *Manager) EnsureMounted(volumeName, mountPoint string) error {
 	fields := map[string]any{
-		"volume":      volumeName,
-		"mount_point": mountPoint,
+		"volume": volumeName,
+		"mount":  mountPoint,
 	}
 
-	// Basic preflight: FUSE device must exist.
-	if _, err := os.Stat("/dev/fuse"); err != nil {
-		fields["error"] = err
-		m.Error("FUSE device not available (/dev/fuse)", fields)
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(mountPoint, 0o755); err != nil {
-		fields["error"] = err
-		m.Error("Failed to create Gluster mount point", fields)
-		return err
-	}
-
-	if mounted, err := m.mountPointMounted(mountPoint); err != nil {
-		fields["error"] = err
-		m.Error("Failed to check if mount point is mounted", fields)
-		return err
-	} else if mounted {
-		// If the FUSE mount is present but broken, unmount and retry.
-		if _, err := os.ReadDir(mountPoint); err != nil {
-			if isTransportEndpointNotConnected(err) {
-				m.Info("Mount point is a broken FUSE mount; unmounting", fields)
-				_ = exec.Command("umount", "-l", mountPoint).Run()
-			} else {
-				fields["error"] = err
-				m.Error("Mount point mounted but not readable", fields)
-				return err
-			}
-		} else {
-			m.Info("Gluster volume already mounted", fields)
+	if isMounted(mountPoint) {
+		if isHealthy(mountPoint) {
+			m.Info("Already mounted and healthy", fields)
 			return nil
 		}
+
+		m.Warn("Mount exists but unhealthy, forcing cleanup", fields)
+		forceUnmount(mountPoint)
 	}
 
 	source := fmt.Sprintf("127.0.0.1:/%s", volumeName)
-	fields["source"] = source
 
 	deadline := time.Now().Add(2 * time.Minute)
+
 	for {
-		cmd := exec.Command("mount", "-t", "glusterfs", source, mountPoint)
-		output, err := cmd.CombinedOutput()
+		cmd := exec.Command(
+			"mount",
+			"-t", "glusterfs",
+			"-o", "backupvolfile-server=127.0.0.1",
+			source,
+			mountPoint,
+		)
+
+		out, err := cmd.CombinedOutput()
+
 		if err == nil {
-			break
+			m.Info("Mounted successfully", fields)
+			return nil
 		}
-		fields["error"] = err
-		fields["output"] = strings.TrimSpace(string(output))
-		m.Error("Failed to mount Gluster volume", fields)
+
+		m.Error("Mount failed, retrying", map[string]any{
+			"error":  err,
+			"output": strings.TrimSpace(string(out)),
+		})
+
 		if time.Now().After(deadline) {
-			return err
+			return fmt.Errorf("mount timeout: %s", out)
 		}
+
 		time.Sleep(2 * time.Second)
 	}
-
-	fields["mount_point_base"] = filepath.Dir(mountPoint)
-	m.Info("Gluster volume mounted successfully", fields)
-	return nil
-}
-
-func isTransportEndpointNotConnected(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(strings.ToLower(err.Error()), "transport endpoint is not connected")
 }
 
 func (m *Manager) VolumeExists(volumeName string) bool {
@@ -204,15 +183,20 @@ func (m *Manager) VolumeStarted(volumeName string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func (m *Manager) mountPointMounted(mountPoint string) (bool, error) {
-	info, err := mountinfo.GetMounts(nil)
-	if err != nil {
-		return false, err
-	}
-	for _, mi := range info {
-		if mi.Mountpoint == mountPoint {
-			return true, nil
-		}
-	}
-	return false, nil
+func isMounted(target string) bool {
+	cmd := exec.Command("findmnt", "-n", target)
+	out, err := cmd.Output()
+	return err == nil && len(out) > 0
+}
+
+func isHealthy(path string) bool {
+	_, err := os.ReadDir(path)
+	return err == nil
+}
+
+func forceUnmount(mp string) {
+	exec.Command("fusermount", "-uz", mp).Run()
+	exec.Command("umount", "-l", mp).Run()
+	exec.Command("pkill", "-f", mp).Run()
+	time.Sleep(2 * time.Second)
 }

@@ -4,7 +4,7 @@ package model
 type GlusterVolumeManager interface {
 	CreateVolume(volumeName string, brickPath string) error
 	StartVolume(volumeName string) error
-	MountVolume(volumeName string, mountPoint string) error
+	EnsureMounted(volumeName string, mountPoint string) error
 	VolumeExists(volumeName string) bool
 	VolumeStarted(volumeName string) bool
 }
