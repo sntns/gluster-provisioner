@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/moby/sys/mountinfo"
 	"github.com/sntns/gluster-provisioner/pkg/capability"
@@ -130,24 +131,51 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 		m.Error("Failed to check if mount point is mounted", fields)
 		return err
 	} else if mounted {
-		m.Info("Gluster volume already mounted", fields)
-		return nil
+		// If the FUSE mount is present but broken, unmount and retry.
+		if _, err := os.ReadDir(mountPoint); err != nil {
+			if isTransportEndpointNotConnected(err) {
+				m.Info("Mount point is a broken FUSE mount; unmounting", fields)
+				_ = exec.Command("umount", "-l", mountPoint).Run()
+			} else {
+				fields["error"] = err
+				m.Error("Mount point mounted but not readable", fields)
+				return err
+			}
+		} else {
+			m.Info("Gluster volume already mounted", fields)
+			return nil
+		}
 	}
 
 	source := fmt.Sprintf("127.0.0.1:/%s", volumeName)
 	fields["source"] = source
 
-	cmd := exec.Command("mount", "-t", "glusterfs", source, mountPoint)
-	if output, err := cmd.CombinedOutput(); err != nil {
+	deadline := time.Now().Add(2 * time.Minute)
+	for {
+		cmd := exec.Command("mount", "-t", "glusterfs", source, mountPoint)
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			break
+		}
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to mount Gluster volume", fields)
-		return err
+		if time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(2 * time.Second)
 	}
 
 	fields["mount_point_base"] = filepath.Dir(mountPoint)
 	m.Info("Gluster volume mounted successfully", fields)
 	return nil
+}
+
+func isTransportEndpointNotConnected(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "transport endpoint is not connected")
 }
 
 func (m *Manager) VolumeExists(volumeName string) bool {
