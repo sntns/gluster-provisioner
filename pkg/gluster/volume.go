@@ -40,11 +40,7 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 	}
 
 	// Check if volume already exists
-	if exists, err := m.VolumeExists(volumeName); err != nil {
-		fields["error"] = err
-		m.Error("Failed to check if Gluster volume exists", fields)
-		return err
-	} else if exists {
+	if exists := m.VolumeExists(volumeName); exists {
 		m.Info("Gluster volume already exists, skipping creation", fields)
 		return nil
 	}
@@ -92,11 +88,7 @@ func (m *Manager) StartVolume(volumeName string) error {
 		"volume": volumeName,
 	}
 
-	if running, err := m.VolumeStarted(volumeName); err != nil {
-		fields["error"] = err
-		m.Error("Failed to check if Gluster volume is started", fields)
-		return err
-	} else if running {
+	if running := m.VolumeStarted(volumeName); running {
 		m.Info("Gluster volume already started", fields)
 		return nil
 	}
@@ -158,21 +150,30 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 	return nil
 }
 
-func (m *Manager) VolumeExists(volumeName string) (bool, error) {
+func (m *Manager) VolumeExists(volumeName string) bool {
 	cmd := exec.Command("gluster", "volume", "info", volumeName)
 	if _, err := cmd.CombinedOutput(); err != nil {
-		return false, nil
+		m.Info("Gluster volume does not exist", map[string]any{
+			"volume": volumeName,
+			"error":  err,
+		})
+		return false
 	}
-	return true, nil
+	return true
 }
 
-func (m *Manager) VolumeStarted(volumeName string) (bool, error) {
+func (m *Manager) VolumeStarted(volumeName string) bool {
 	cmd := exec.Command("gluster", "volume", "status", volumeName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return false, err
+		m.Info("Gluster volume is not started", map[string]any{
+			"volume": volumeName,
+			"error":  err,
+			"output": strings.TrimSpace(string(output)),
+		})
+		return false
 	}
-	return len(strings.TrimSpace(string(output))) > 0, nil
+	return len(strings.TrimSpace(string(output))) > 0
 }
 
 func (m *Manager) mountPointMounted(mountPoint string) (bool, error) {

@@ -5,8 +5,8 @@ type GlusterVolumeManager interface {
 	CreateVolume(volumeName string, brickPath string) error
 	StartVolume(volumeName string) error
 	MountVolume(volumeName string, mountPoint string) error
-	VolumeExists(volumeName string) (bool, error)
-	VolumeStarted(volumeName string) (bool, error)
+	VolumeExists(volumeName string) bool
+	VolumeStarted(volumeName string) bool
 }
 
 // GlusterVolume represents a created Gluster volume

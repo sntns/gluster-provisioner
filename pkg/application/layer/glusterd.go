@@ -124,10 +124,7 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 		if err := func() error {
 			defer func() { _ = mutex.Unlock(context.Background()) }()
 
-			exists, err := s.GlusterManager.VolumeExists(volumeName)
-			if err != nil {
-				return err
-			}
+			exists := s.GlusterManager.VolumeExists(volumeName)
 			if !exists {
 				s.Info("Creating Gluster volume (leader via lock)", fields)
 				if err := s.GlusterManager.CreateVolume(volumeName, brickPath); err != nil {
@@ -135,10 +132,7 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 				}
 			}
 
-			started, err := s.GlusterManager.VolumeStarted(volumeName)
-			if err != nil {
-				return err
-			}
+			started := s.GlusterManager.VolumeStarted(volumeName)
 			if !started {
 				s.Info("Starting Gluster volume (leader via lock)", fields)
 				if err := s.GlusterManager.StartVolume(volumeName); err != nil {
@@ -185,8 +179,12 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 }
 
 func etcdMarkReady(ctx context.Context, cli *clientv3.Client, prefix, volumeName, nodeID, brickPath string) error {
+	lease, err := cli.Grant(ctx, 600)
+	if err != nil {
+		return err
+	}
 	key := fmt.Sprintf("%s/ready/%s/%s", prefix, volumeName, nodeID)
-	_, err := cli.Put(ctx, key, brickPath)
+	_, err = cli.Put(ctx, key, brickPath, clientv3.WithLease(lease.ID))
 	return err
 }
 
@@ -216,15 +214,9 @@ func waitForVolumeReady(ctx context.Context, mgr model.GlusterVolumeManager, vol
 	defer ticker.Stop()
 
 	for {
-		exists, err := mgr.VolumeExists(volumeName)
-		if err != nil {
-			return err
-		}
+		exists := mgr.VolumeExists(volumeName)
 		if exists {
-			started, err := mgr.VolumeStarted(volumeName)
-			if err != nil {
-				return err
-			}
+			started := mgr.VolumeStarted(volumeName)
 			if started {
 				return nil
 			}
