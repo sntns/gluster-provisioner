@@ -27,7 +27,7 @@ func NewManager(logger capability.Logger) *Manager {
 
 // CreateVolume creates a new Gluster volume with the given name and brick path
 func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"volume":     volumeName,
 		"brick_path": brickPath,
 	}
@@ -36,12 +36,16 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 	if err := os.MkdirAll(brickPath, 0o755); err != nil {
 		fields["error"] = err
 		m.Error("Failed to create brick directory", fields)
-		return fmt.Errorf("failed to create brick directory: %w", err)
+		return err
 	}
 
 	// Check if volume already exists
-	if err := m.volumeExists(volumeName); err == nil {
-		m.Info("Gluster volume already exists", fields)
+	if exists, err := m.VolumeExists(volumeName); err != nil {
+		fields["error"] = err
+		m.Error("Failed to check if Gluster volume exists", fields)
+		return err
+	} else if exists {
+		m.Info("Gluster volume already exists, skipping creation", fields)
 		return nil
 	}
 
@@ -74,7 +78,7 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to create Gluster volume", fields)
-		return fmt.Errorf("failed to create gluster volume: %w", err)
+		return err
 	}
 
 	fields["bricks"] = bricks
@@ -84,11 +88,15 @@ func (m *Manager) CreateVolume(volumeName string, brickPath string) error {
 
 // StartVolume starts a Gluster volume
 func (m *Manager) StartVolume(volumeName string) error {
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"volume": volumeName,
 	}
 
-	if running, err := m.volumeStarted(volumeName); err == nil && running {
+	if running, err := m.VolumeStarted(volumeName); err != nil {
+		fields["error"] = err
+		m.Error("Failed to check if Gluster volume is started", fields)
+		return err
+	} else if running {
 		m.Info("Gluster volume already started", fields)
 		return nil
 	}
@@ -98,7 +106,7 @@ func (m *Manager) StartVolume(volumeName string) error {
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to start Gluster volume", fields)
-		return fmt.Errorf("failed to start gluster volume: %w", err)
+		return err
 	}
 
 	m.Info("Gluster volume started successfully", fields)
@@ -107,7 +115,7 @@ func (m *Manager) StartVolume(volumeName string) error {
 
 // MountVolume mounts a Gluster volume via the system mount helper.
 func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"volume":      volumeName,
 		"mount_point": mountPoint,
 	}
@@ -116,16 +124,20 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 	if _, err := os.Stat("/dev/fuse"); err != nil {
 		fields["error"] = err
 		m.Error("FUSE device not available (/dev/fuse)", fields)
-		return fmt.Errorf("fuse device not available (/dev/fuse): %w", err)
+		return err
 	}
 
 	if err := os.MkdirAll(mountPoint, 0o755); err != nil {
 		fields["error"] = err
 		m.Error("Failed to create Gluster mount point", fields)
-		return fmt.Errorf("failed to create gluster mount point: %w", err)
+		return err
 	}
 
-	if mounted, err := m.mountPointMounted(mountPoint); err == nil && mounted {
+	if mounted, err := m.mountPointMounted(mountPoint); err != nil {
+		fields["error"] = err
+		m.Error("Failed to check if mount point is mounted", fields)
+		return err
+	} else if mounted {
 		m.Info("Gluster volume already mounted", fields)
 		return nil
 	}
@@ -138,7 +150,7 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 		fields["error"] = err
 		fields["output"] = strings.TrimSpace(string(output))
 		m.Error("Failed to mount Gluster volume", fields)
-		return fmt.Errorf("failed to mount gluster volume: %w", err)
+		return err
 	}
 
 	fields["mount_point_base"] = filepath.Dir(mountPoint)
@@ -146,15 +158,15 @@ func (m *Manager) MountVolume(volumeName string, mountPoint string) error {
 	return nil
 }
 
-func (m *Manager) volumeExists(volumeName string) error {
+func (m *Manager) VolumeExists(volumeName string) (bool, error) {
 	cmd := exec.Command("gluster", "volume", "info", volumeName)
 	if _, err := cmd.CombinedOutput(); err != nil {
-		return err
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
-func (m *Manager) volumeStarted(volumeName string) (bool, error) {
+func (m *Manager) VolumeStarted(volumeName string) (bool, error) {
 	cmd := exec.Command("gluster", "volume", "status", volumeName)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

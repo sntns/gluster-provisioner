@@ -2,11 +2,16 @@ package layer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/sntns/gluster-provisioner/pkg/capability"
 	"github.com/sntns/gluster-provisioner/pkg/model"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/client/v3/concurrency"
 )
 
 type Glusterd struct {
@@ -36,7 +41,35 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 		"mountpoints": len(mountedState.Mountpoints),
 	}
 
-	s.Debug("Creating Gluster volumes", fields)
+	rawEndpoints := strings.TrimSpace(os.Getenv("ETCD_ENDPOINTS"))
+	if rawEndpoints == "" {
+		err := fmt.Errorf("ETCD_ENDPOINTS must be set (comma-separated)")
+		fields["error"] = err
+		s.Error("Missing ETCD configuration", fields)
+		return err
+	}
+
+	endpoints := strings.Split(rawEndpoints, ",")
+
+	fields["etcd_endpoints"] = endpoints
+
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints: endpoints,
+	})
+	if err != nil {
+		fields["error"] = err
+		s.Error("Failed to create etcd client", fields)
+		return err
+	}
+	defer func() { _ = etcdClient.Close() }()
+
+	etcdSession, err := concurrency.NewSession(etcdClient)
+	if err != nil {
+		fields["error"] = err
+		s.Error("Failed to create etcd session", fields)
+		return err
+	}
+	defer func() { _ = etcdSession.Close() }()
 
 	var volumes model.GlusterVolumes
 	for _, mountpoint := range mountedState.Mountpoints {
@@ -57,24 +90,74 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 			return err
 		}
 
-		if hostname == "eu2-sntns-docker-1.novalocal" {
-			s.Info("Running on Gluster node, creating and starting volume", fields)
+		if err := os.MkdirAll(brickPath, 0o755); err != nil {
+			fields["error"] = err
+			s.Error("Failed to create brick directory", fields)
+			return fmt.Errorf("failed to create brick directory: %w", err)
+		}
 
-			// Create the volume
-			err = s.GlusterManager.CreateVolume(volumeName, brickPath)
+		readyCtx, cancelReady := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancelReady()
+
+		if err := etcdMarkReady(readyCtx, etcdClient, "/gluster", volumeName, hostname, brickPath); err != nil {
+			fields["error"] = err
+			s.Error("Failed to mark node ready in etcd", fields)
+			return err
+		}
+
+		if err := etcdWaitForReady(readyCtx, etcdClient, "/gluster", volumeName, len(endpoints)); err != nil {
+			fields["error"] = err
+			s.Error("Timeout waiting for all nodes to become ready", fields)
+			return err
+		}
+
+		mutex := concurrency.NewMutex(etcdSession, "/gluster/mutex/"+volumeName)
+		lockCtx, cancelLock := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancelLock()
+
+		if err := mutex.Lock(lockCtx); err != nil {
+			fields["error"] = err
+			s.Error("Failed to acquire distributed lock", fields)
+			return err
+		}
+		s.Info("Acquired distributed lock for volume operations", fields)
+		if err := func() error {
+			defer func() { _ = mutex.Unlock(context.Background()) }()
+
+			exists, err := s.GlusterManager.VolumeExists(volumeName)
 			if err != nil {
-				fields["error"] = err
-				s.Error("Failed to create Gluster volume", fields)
 				return err
 			}
+			if !exists {
+				s.Info("Creating Gluster volume (leader via lock)", fields)
+				if err := s.GlusterManager.CreateVolume(volumeName, brickPath); err != nil {
+					return err
+				}
+			}
 
-			// Start the volume
-			err = s.GlusterManager.StartVolume(volumeName)
+			started, err := s.GlusterManager.VolumeStarted(volumeName)
 			if err != nil {
-				fields["error"] = err
-				s.Error("Failed to start Gluster volume", fields)
 				return err
 			}
+			if !started {
+				s.Info("Starting Gluster volume (leader via lock)", fields)
+				if err := s.GlusterManager.StartVolume(volumeName); err != nil {
+					return err
+				}
+			}
+			return nil
+		}(); err != nil {
+			fields["error"] = err
+			s.Error("Failed to create/start volume within distributed lock", fields)
+			return err
+		}
+
+		waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancelWait()
+		if err := waitForVolumeReady(waitCtx, s.GlusterManager, volumeName); err != nil {
+			fields["error"] = err
+			s.Error("Volume did not become ready in time", fields)
+			return err
 		}
 
 		// Mount the volume via FUSE so the host can access it through the shared bind mount.
@@ -99,6 +182,59 @@ func (s *Glusterd) Up(ctx context.Context, state *State) error {
 	}
 
 	return nil
+}
+
+func etcdMarkReady(ctx context.Context, cli *clientv3.Client, prefix, volumeName, nodeID, brickPath string) error {
+	key := fmt.Sprintf("%s/ready/%s/%s", prefix, volumeName, nodeID)
+	_, err := cli.Put(ctx, key, brickPath)
+	return err
+}
+
+func etcdWaitForReady(ctx context.Context, cli *clientv3.Client, prefix, volumeName string, expectedNodes int) error {
+	keyPrefix := fmt.Sprintf("%s/ready/%s/", prefix, volumeName)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		resp, err := cli.Get(ctx, keyPrefix, clientv3.WithPrefix())
+		if err != nil {
+			return err
+		}
+		if len(resp.Kvs) >= expectedNodes {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForVolumeReady(ctx context.Context, mgr model.GlusterVolumeManager, volumeName string) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		exists, err := mgr.VolumeExists(volumeName)
+		if err != nil {
+			return err
+		}
+		if exists {
+			started, err := mgr.VolumeStarted(volumeName)
+			if err != nil {
+				return err
+			}
+			if started {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (s *Glusterd) Down(ctx context.Context, state *State) error {
