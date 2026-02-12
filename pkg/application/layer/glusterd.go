@@ -129,12 +129,23 @@ func (s *Glusterd) reconcileVolume(ctx context.Context, cli *clientv3.Client, se
 	func() {
 		defer mutex.Unlock(context.Background())
 
-		if !s.GlusterManager.VolumeExists(volume) {
-			s.GlusterManager.CreateVolume(volume, brick)
-		}
+		for {
+			if !s.GlusterManager.VolumeExists(volume) {
+				s.Info("Volume does not exist, attempting create", fields)
+				s.GlusterManager.CreateVolume(volume, brick)
+				time.Sleep(5 * time.Second)
+				continue
+			}
 
-		if !s.GlusterManager.VolumeStarted(volume) {
-			s.GlusterManager.StartVolume(volume)
+			if !s.GlusterManager.VolumeStarted(volume) {
+				s.Info("Volume exists but not started, attempting start", fields)
+				s.GlusterManager.StartVolume(volume)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			s.Info("Volume exists and started", fields)
+			break
 		}
 	}()
 

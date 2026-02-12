@@ -117,10 +117,7 @@ GLUSTERD_PID=$!
 echo "GlusterFS daemon started with PID $GLUSTERD_PID"
 
 # Give glusterd time to start
-sleep 2
-
-# Wait a bit more for glusterd to be fully ready
-sleep 3
+sleep 5
 
 # Initial peer probing with verbose output
 if [ -n "$GLUSTER_PEERS" ]; then
