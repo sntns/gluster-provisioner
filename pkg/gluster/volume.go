@@ -110,18 +110,19 @@ func (m *Manager) EnsureMounted(volumeName, mountPoint string) error {
 		"mount":  mountPoint,
 	}
 
-	if err := os.MkdirAll(mountPoint, 0755); err != nil {
-		return err
+	// 1. If something is mounted here, kill it FIRST (no filesystem syscalls yet)
+	if isMounted(mountPoint) {
+		m.Warn("Existing mount detected, forcing unmount", fields)
+		forceUnmount(mountPoint)
 	}
 
-	if isMounted(mountPoint) {
-		if isHealthy(mountPoint) {
-			m.Info("Already mounted and healthy", fields)
-			return nil
-		}
+	// 2. Remove mountpoint regardless of state (ignores ENOTCONN)
+	_ = os.RemoveAll(mountPoint)
 
-		m.Warn("Mount exists but unhealthy, forcing cleanup", fields)
-		forceUnmount(mountPoint)
+	// 3. Recreate clean directory
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+		fields["error"] = err
+		return fmt.Errorf("mkdir mountpoint failed: %w", err)
 	}
 
 	source := fmt.Sprintf("127.0.0.1:/%s", volumeName)
@@ -184,19 +185,13 @@ func (m *Manager) VolumeStarted(volumeName string) bool {
 }
 
 func isMounted(target string) bool {
-	cmd := exec.Command("findmnt", "-n", target)
+	cmd := exec.Command("findmnt", "-n", "-T", target)
 	out, err := cmd.Output()
 	return err == nil && len(out) > 0
 }
 
-func isHealthy(path string) bool {
-	_, err := os.ReadDir(path)
-	return err == nil
-}
-
 func forceUnmount(mp string) {
+	exec.Command("umount", "-lf", mp).Run()
 	exec.Command("fusermount", "-uz", mp).Run()
-	exec.Command("umount", "-l", mp).Run()
-	exec.Command("pkill", "-f", mp).Run()
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 }
